@@ -22,12 +22,12 @@
 | Barre d'outils · Toolbar |
 |:---:|
 | ![Barre d'outils Box_cad](screenshot/barre_outils.png) |
-| Localiser et supprimer — masquer — annuler — tout afficher / éteindre — trier — ordre des couches |
+| Localiser et supprimer — masquer — annuler — tout afficher / éteindre — ordre des couches et tri (bouton à menu) |
 
 | Barre Dessin · Drawing toolbar | Saisie près du curseur · Dynamic input |
 |:---:|:---:|
 | ![Barre Box_cad Dessin](screenshot/barre_dessin.png) | <img src="screenshot/saisie_dynamique.png" width="420" alt="Saisie dynamique"/> |
-| Ligne — polyligne — rectangle — rectangle orienté — carré — cercle — rotation — gomme<br>ortho (F8) | Longueur en cours de frappe<br>et angle près du curseur |
+| Tracer ▾ — Modifier ▾ — Annoter ▾ — remplissage — accrochage (F3) — ortho (F8)<br>pastille : couleur, épaisseur et couche qui reçoit le dessin | Valeurs près du curseur ;<br>étape, champs et touches dans la barre d'état |
 
 | À propos · About |
 |:---:|
