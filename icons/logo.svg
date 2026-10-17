@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="128" height="128">
+  <!-- Fond -->
+  <rect x="2" y="2" width="60" height="60" rx="13" fill="#3a3f44"/>
+  <!-- Pile de calques : couleurs du jeu d'icones (bleu localiser, violet ordre, vert afficher) -->
+  <path d="M8 40 L28 50.5 L48 40 L28 29.5Z" fill="#2563eb" fill-opacity="0.35" stroke="#60a5fa" stroke-width="2.6" stroke-linejoin="round"/>
+  <path d="M8 30.5 L28 41 L48 30.5 L28 20Z" fill="#7c3aed" fill-opacity="0.40" stroke="#a78bfa" stroke-width="2.6" stroke-linejoin="round"/>
+  <path d="M8 21 L28 31.5 L48 21 L28 10.5Z" fill="#16a34a" fill-opacity="0.45" stroke="#4ade80" stroke-width="2.6" stroke-linejoin="round"/>
+  <!-- Pastille cible (clic sur l'objet) -->
+  <circle cx="46.5" cy="46.5" r="11.5" fill="#3a3f44"/>
+  <circle cx="46.5" cy="46.5" r="7.5" fill="#ffffff" fill-opacity="0.12" stroke="#ffffff" stroke-width="2.6"/>
+  <circle cx="46.5" cy="46.5" r="2.4" fill="#ffffff"/>
+  <path d="M46.5 35.5 V39.5 M46.5 53.5 V57.5 M35.5 46.5 H39.5 M53.5 46.5 H57.5" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,45 @@
+[general]
+name=Box_cad
+qgisMinimumVersion=3.16
+qgisMaximumVersion=3.99
+description=FR: Masquer des couches ou entites par clic et dessiner a la cote, style AutoCAD
+    EN: Hide layers or features by click and draw with typed dimensions, AutoCAD style
+about=FR: Barre d'outils de nettoyage rapide de l'affichage, inspiree d'AutoCAD Map : localiser la couche d'un objet par clic,
+    masquer une couche ou une entite par clic, supprimer des entites par clic ou au lasso (avec confirmation),
+    tout afficher / tout eteindre, trier les couches par type de geometrie et changer l'ordre d'une couche par clic.
+    Barre Dessin : ligne, polyligne, rectangle (orientable), carre et cercle avec longueurs et angles tapes
+    pres du curseur, accrochage et ortho.
+    Chaque action est annulable. Auteur : Yoan Laloux - https://www.linkedin.com/in/ylaloux/
+    EN: Quick display cleanup toolbar, AutoCAD Map style: locate a feature's layer by click, hide a layer or a feature by click,
+    delete features by click or lasso (with confirmation), show all / hide all, sort layers by geometry type
+    and reorder a layer by click. Drawing toolbar: line, polyline, rectangle (rotatable), square and circle with
+    typed lengths and angles next to the cursor, snapping and ortho. Every action can be undone. Author: Yoan Laloux - https://www.linkedin.com/in/ylaloux/
+version=1.1.0
+changelog=1.1.0
+    - Barre Box_cad Dessin en 3 menus : ligne, polyligne, rectangles, carre, polygone, cercle, texte, cote, deplacer, copier, rotation, miroir, echelle, gomme, proprietes, remplissage, accrochage F3 / drawing toolbar
+    - Saisie dynamique pres du curseur, accrochage, ortho F8 / dynamic input, snapping, ortho
+    - Dessin dans la couche active en edition, sinon couche brouillon memoire / active layer or memory draft layer
+    - Bouton a menu Ordre des couches (4 outils + tri) dans la barre principale / layer order menu button
+    - Pastille couleur, epaisseur et couche cible dans la barre Dessin / current properties and target chip
+    - Saisie minimale pres du curseur, etape et champs dans la barre d'etat / minimal dynamic input, prompt in status bar
+    - Outil Angle : cotation angulaire par 2 lignes ou 3 points / angular dimension tool
+    - Annotations prioritaires a la designation, formes vides par contour ou centre / annotations picked first, hollow shapes by outline or center
+    - Menu Extensions unique et range par sections / single, organized Plugins menu
+    - Cotes associatives, deplacement de la ligne de cote seule / associative dimensions
+    1.0.0
+    - Premiere version publique / first public release
+    - Jeu d'icones harmonise (couleurs SIG) / harmonized icon set
+    - Masquage d'entites : les filtres existants des couches sont conserves / existing layer filters are kept
+    - Suppression : pas d'enregistrement force d'une edition en cours, annulation fiable / no forced commit, reliable undo
+    - Tri par geometrie annulable, sous-groupes conserves / undoable sort, subgroups kept
+    - Boutons toujours synchronises avec l'outil actif / buttons stay in sync with the active tool
+    - Menu Extensions et fenetre A propos / Plugins menu and About dialog
+    - Compatibilite Qt6 (QGIS 4) / Qt6 compatibility
+author=Yoan Laloux
+email=y.laloux@vichy-communaute.fr
+homepage=https://github.com/Cartoyoyo/Box_Cad
+tracker=https://github.com/Cartoyoyo/Box_Cad/issues
+repository=https://github.com/Cartoyoyo/Box_Cad
+license=GNU GPL v3
+icon=icon.png
+hasProcessingProvider=no
