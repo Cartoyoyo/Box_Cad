@@ -32,7 +32,7 @@
 | À propos · About |
 |:---:|
 | <img src="screenshot/a_propos.png" width="380" alt="Fenêtre À propos"/> |
-| Aide-mémoire des outils<br>intégré au plugin |
+| Présentation du plugin,<br>auteur, licence et dépôt |
 
 </div>
 
