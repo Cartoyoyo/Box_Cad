@@ -25,6 +25,7 @@
 - Gomme : clic ou lasso, n'efface que les formes des couches brouillon « Box_cad dessin » visibles ; surbrillance de la forme visée ; annulable.
 - Accrochage QGIS, mode ortho (F8), cotes et surface en direct.
 - Dessin dans la couche active si elle est en édition et du bon type (formulaire d'attributs QGIS, Ctrl+Z), sinon dans une couche brouillon en mémoire « Box_cad dessin » ; le bouton Annuler retire la dernière forme du brouillon.
+- Fenêtre « À propos » : courte présentation du plugin à la place de la liste défilante des outils ; elle tient sans défilement sur un écran de 720 px.
 
 ## 1.0.0 — 2026-10-16
 
