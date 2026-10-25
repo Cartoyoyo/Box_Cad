@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.0 — 2026-10-25
+
+### Ajouts
+- **Plusieurs objets** pour Déplacer, Copier, Rotation, Miroir, Échelle et Aligner : cliquer-glisser entoure des objets (lasso, comme la Gomme), autant de fois que voulu ; Entrée ou clic droit passe à l'étape suivante, un clic sur un objet l'ajoute et passe aussi à la suite ; Échap vide la désignation. Un clic simple sur un objet seul enchaîne directement, comme avant. Toute la sélection se transforme d'un coup, avec un seul Annuler pour les dessins (et une commande Ctrl+Z par couche active en édition) ; Copier pose une copie de chaque objet. Les cotes et angles posés sur les formes désignées suivent, en bloc s'ils relient deux d'entre elles ; une cote désignée avec d'autres objets se déplace en bloc. Rotation et Échelle : Entrée prend le centre de l'emprise de la sélection. Propriétés reste mono-objet.
+- **Bandeau d'aide sur tous les outils de dessin** (Tracer, Modifier, Annoter, Gomme), comme celui d'Aligner : étapes (faites cochées, en cours soulignée), consigne de l'étape, touches utiles ; Angle suit le mode choisi (deux lignes ou sommet et deux points), Échelle sa bascule R. Nouvelle case *Modes de dessin → Bandeau d'aide* pour le couper (mémorisée).
+
+### Corrections
+- Lasso refermé près de son point de départ : la Gomme et l'outil Supprimer le prenaient pour un simple clic ; il est reconnu dès que la souris s'est éloignée de 5 px pendant l'appui.
+- Lasso de la Gomme : les textes n'étaient pas toujours repris (géométrie de leur cadre libérée avant le test d'intersection, risque de plantage).
+
 ## 1.2.2 — 2026-10-25
 
 ### Modifications

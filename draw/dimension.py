@@ -57,6 +57,12 @@ def moved_dimension(geom, dx, dy):
 
 class DimensionTool(DrawTool):
     TOOL_NAME = "cote"
+    GUIDE_STEPS = ("Premier point", "Second point", "Position")
+    GUIDE_HINTS = ("Cliquez le premier point à coter (accrochage objet : extrémités, milieux…).",
+                   "Cliquez le second point, ou tapez la <b>longueur</b> (Tab : <b>angle</b>) puis Entrée.",
+                   "Placez la ligne de cote à la souris et cliquez, ou tapez le <b>décalage</b> ; "
+                   "<b>Entrée</b> : cote posée sur les points.")
+    GUIDE_KEYS = "U : point précédent · F8 : ortho · F3 : accrochage objet · Échap : recommencer"
 
     def start(self):
         self.points = []

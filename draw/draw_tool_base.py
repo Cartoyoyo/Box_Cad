@@ -9,6 +9,7 @@ from . import geometry as G
 from . import target as T
 from .crs import Frame, work_crs
 from .dynamic_input import DynamicInput
+from .guide import GuideBanner, guide_html
 from .osnap import LABELS as OSNAP_LABELS, ObjectSnapper
 
 ACCENT = QColor("#ea580c")
@@ -32,13 +33,19 @@ HANDLED_KEYS = {
     Qt.Key.Key_Enter, Qt.Key.Key_Escape, Qt.Key.Key_F8,
     Qt.Key.Key_U, Qt.Key.Key_C, Qt.Key.Key_A, Qt.Key.Key_F3,
 }
+KEYS_DRAW = "F8 : ortho · F3 : accrochage objet · Échap : recommencer"
 
 
 class DrawTool(QgsMapTool):
     """Les sous-classes definissent TOOL_NAME, start(), compute(mouse), on_click(pt)
-    et, si besoin, on_finish(), on_close(), undo_point()."""
+    et, si besoin, on_finish(), on_close(), undo_point().
+    Bandeau d'aide : GUIDE_STEPS (noms des etapes), GUIDE_HINTS (consigne par etape),
+    GUIDE_KEYS (touches) et guide_step() (etape en cours, par defaut le nombre de points)."""
 
     TOOL_NAME = ""
+    GUIDE_STEPS = ()
+    GUIDE_HINTS = ()
+    GUIDE_KEYS = KEYS_DRAW
 
     def __init__(self, canvas, plugin, action):
         super().__init__(canvas)
@@ -59,6 +66,7 @@ class DrawTool(QgsMapTool):
         self.angle_absolute = False
         # SCR de travail : metres vrais meme si la carte est en degres ou en Web Mercator
         self.frame = None
+        self.banner = None      # bandeau d'aide
         self.setCursor(QgsApplication.getThemeCursor(QgsApplication.Cursor.CapturePoint))
 
     # ------------------------------------------------------------------
@@ -86,8 +94,9 @@ class DrawTool(QgsMapTool):
         canvas.installEventFilter(self)
         canvas.destinationCrsChanged.connect(self._on_crs_changed)
         canvas.extentsChanged.connect(self._on_extent_changed)
+        self.banner = GuideBanner(self.plugin.iface)
         self.start()
-        self._notice_work_crs()        # apres start() : le bandeau d'Aligner ne le cache pas
+        self._notice_work_crs()        # apres start() : le bandeau d'aide ne le cache pas
 
     def deactivate(self):
         canvas = self.canvas()
@@ -111,6 +120,9 @@ class DrawTool(QgsMapTool):
             self.dyn.deleteLater()
             self.dyn = None
         self.plugin.show_draw_status("")
+        if self.banner is not None:
+            self.banner.hide()
+            self.banner = None
         self.points = []
         super().deactivate()
         self.plugin._on_tool_deactivated(self.action)
@@ -360,6 +372,38 @@ class DrawTool(QgsMapTool):
 
     def configure(self, prompt, fields=()):
         self.dyn.configure(prompt, list(fields))
+        self.update_guide()        # chaque changement d'etape passe par ici
+
+    # ------------------------------------------------------------------
+    # Bandeau d'aide
+    # ------------------------------------------------------------------
+
+    def guide_name(self):
+        name = getattr(self, "NAME", "") or self.TOOL_NAME
+        return name[:1].upper() + name[1:]
+
+    def guide_step(self):
+        """Etape en cours (index dans GUIDE_STEPS)."""
+        return min(len(self.points), len(self.GUIDE_STEPS) - 1)
+
+    def guide_hint(self, index):
+        return self.GUIDE_HINTS[index]
+
+    def guide_text(self):
+        """Contenu du bandeau, ou None (pas de bandeau pour cet outil)."""
+        if not self.GUIDE_STEPS:
+            return None
+        index = self.guide_step()
+        return guide_html(self.guide_name(), self.GUIDE_STEPS, index, self.guide_hint(index), self.GUIDE_KEYS)
+
+    def update_guide(self):
+        if self.banner is None:
+            return
+        text = self.guide_text() if getattr(self.plugin, "draw_guide", True) else None
+        if text:
+            self.banner.show(text)
+        else:
+            self.banner.hide()
 
     # ------------------------------------------------------------------
     # Enregistrement

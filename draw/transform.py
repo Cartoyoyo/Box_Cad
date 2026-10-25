@@ -1,69 +1,101 @@
-"""Transformations facon DAO sur UN objet : Deplacer, Copier, Rotation, Miroir, Echelle,
-Aligner.
+"""Transformations facon DAO : Deplacer, Copier, Rotation, Miroir, Echelle, Aligner.
 
 Etapes communes : designer l'objet (surbrillance au survol) -> point(s) -> valeur.
+Plusieurs objets : cliquer-glisser entoure des objets (lasso, comme la gomme), autant de fois
+que voulu ; Entree, clic droit, ou un clic sur un objet (ajoute) passent a l'etape suivante.
 Objets concernes : dessins Box_cad (brouillons visibles) et couche active en edition.
-  - brouillon : changement direct + bouton Annuler de Box_cad ;
+  - brouillon : changement direct + bouton Annuler de Box_cad (une annulation pour tous) ;
   - couche active : commande d'edition QGIS (Ctrl+Z), rien n'est enregistre sur disque.
 Calculs dans le SCR de travail des outils (metres vrais) : objet couche -> travail ->
 transformation -> couche.
 Cotes associatives : Deplacer, Rotation, Miroir, Echelle et Aligner d'une forme entrainent les cotes
 et les angles poses sur elle (points mesures sur la forme), annules avec elle.
-Deplacer une cote ou un angle ne bouge que la ligne de cote / l'arc : les rappels s'adaptent.
+Deplacer une cote ou un angle designe seul ne bouge que la ligne de cote / l'arc : les rappels
+s'adaptent ; dans une selection de plusieurs objets, il se deplace en bloc.
 """
 from qgis.core import (
-    Qgis, QgsFeature, QgsFeatureRequest, QgsGeometry, QgsPointXY, QgsProject,
+    QgsFeature, QgsFeatureRequest, QgsGeometry, QgsPointXY, QgsProject, QgsRectangle,
     QgsVectorLayerUtils,
 )
-from qgis.gui import QgsMessageBarItem, QgsRubberBand
-from qgis.PyQt import sip
+from qgis.gui import QgsRubberBand
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QColor
-from qgis.PyQt.QtWidgets import QLabel, QSizePolicy
 
 from . import geometry as G
 from . import target as T
 from .crs import pixel_size
 from .angle_dim import angle_parts, build_angle, moved_angle
 from .dimension import dimension_geometry, dimension_parts, moved_dimension
-from .draw_tool_base import ACCENT, DrawTool
-from .pick import _number, editable_layers, hit_geometry, is_text_layer, pick_feature
+from .draw_tool_base import ACCENT, KEYS_DRAW, DrawTool
+from .pick import _number, editable_layers, features_in_lasso, hit_geometry, is_text_layer, pick_feature
 
 STEP_PICK = 0
 LINKED_KINDS = ("dimension", "angle")
 LINK_TOLERANCE_PX = 0.5     # point de cote considere comme pose sur la forme
+LASSO_THRESHOLD = 5         # pixels avant de passer en lasso (comme la gomme)
+SELECTION = QColor(37, 99, 235)
+PICK_HINT = ("Cliquez l'objet : forme dessinée, ou objet de la couche active en édition. "
+             "<b>Cliquer-glisser</b> : en entourer plusieurs.")
 
 
 def _kind(layer):
     return layer.customProperty(T.DRAFT_PROPERTY)
 
 
+def _key(hit):
+    layer, feature = hit
+    return layer.id(), feature.id()
+
+
+def _count(n):
+    return f"{n} objet" + ("s" if n > 1 else "")
+
+
 class TransformTool(DrawTool):
     """Base : les sous-classes definissent NAME, after_pick(), compute_step(mouse),
-    click_step(pt), finish_step() et transform_geometry(layer, feature)."""
+    click_step(pt), finish_step() et transform_geometry(layer, feature) ; la
+    transformation s'applique a tous les objets designes (self.targets)."""
 
     NAME = ""
+    MULTI = True            # plusieurs objets au lasso
+    GUIDE_KEYS = KEYS_DRAW
 
     def __init__(self, canvas, plugin, action):
         super().__init__(canvas, plugin, action)
         self.TOOL_NAME = self.NAME.lower()
         self.step = STEP_PICK
-        self.target = None      # (couche, QgsFeature) designe
+        self.targets = []       # objets designes [(couche, QgsFeature)]
+        self.target = None      # le premier d'entre eux
         self.hover = None
         self.base = None        # point de base, SCR de travail
-        self.rb_obj = None
+        self.rb_obj = self.rb_obj_lines = self.rb_lasso = None
+        self._work = {}         # geometries des objets designes, SCR de travail
+        self._press = None      # position du clic gauche enfonce (lasso)
+        self._dragged = False   # la souris s'est eloignee du clic : c'est un lasso
+        self._lasso = []
 
     def activate(self):
         super().activate()
         self.rb_obj = QgsRubberBand(self.canvas(), T.POLYGON)
-        self.rb_obj.setStrokeColor(QColor(37, 99, 235))
+        self.rb_obj.setStrokeColor(SELECTION)
         self.rb_obj.setFillColor(QColor(37, 99, 235, 40))
         self.rb_obj.setWidth(2)
+        # lignes en trait epais, sans tampon : rapide meme pour des centaines de canalisations
+        self.rb_obj_lines = QgsRubberBand(self.canvas(), T.LINE)
+        self.rb_obj_lines.setStrokeColor(SELECTION)
+        self.rb_obj_lines.setWidth(4)
+        self.rb_lasso = QgsRubberBand(self.canvas(), T.POLYGON)
+        self.rb_lasso.setStrokeColor(SELECTION)
+        self.rb_lasso.setFillColor(QColor(37, 99, 235, 25))
+        self.rb_lasso.setLineStyle(Qt.PenStyle.DashLine)
+        self.rb_lasso.setWidth(1)
 
     def deactivate(self):
-        if self.rb_obj is not None:
-            self.canvas().scene().removeItem(self.rb_obj)
-            self.rb_obj = None
+        for rb in (self.rb_obj, self.rb_obj_lines, self.rb_lasso):
+            if rb is not None:
+                self.canvas().scene().removeItem(rb)
+        self.rb_obj = self.rb_obj_lines = self.rb_lasso = None
+        self._press = None
         super().deactivate()
 
     def wants_osnap(self):
@@ -76,8 +108,25 @@ class TransformTool(DrawTool):
     def start(self):
         self.step = STEP_PICK
         self.target = self.hover = self.base = None
+        self.targets = []
+        self._work = {}
         self.points = []
-        self.configure(f"{self.NAME.upper()} · cliquez l'objet :")
+        self.configure(self.pick_prompt())
+
+    def pick_prompt(self):
+        if self.targets:
+            return f"{self.NAME.upper()} · {_count(len(self.targets))} (Entrée : continuer) :"
+        more = " (cliquer-glisser : plusieurs)" if self.MULTI else ""
+        return f"{self.NAME.upper()} · cliquez l'objet{more} :"
+
+    def guide_step(self):
+        return self.step
+
+    def guide_hint(self, index):
+        if index == STEP_PICK and self.targets:
+            return (f"<b>{_count(len(self.targets))}</b> · <b>Entrée</b> ou clic droit : continuer · "
+                    "clic sur un objet : l'ajouter et continuer · glisser : en entourer d'autres")
+        return self.GUIDE_HINTS[index]
 
     def compute(self, mouse):
         if self.step == STEP_PICK:
@@ -86,18 +135,21 @@ class TransformTool(DrawTool):
         return self.compute_step(mouse)
 
     def on_click(self, pt):
-        if self.step == STEP_PICK:
-            if self.hover is None:
+        if self.step != STEP_PICK:
+            self.click_step(QgsPointXY(pt))
+            return
+        if self.hover is None:
+            if not self.targets:
                 self.plugin.warn(f"{self.NAME} : cliquez une forme dessinée, "
                                  "ou un objet de la couche active en édition.")
-                return
-            self.target = self.hover
-            self.after_pick()
-        else:
-            self.click_step(QgsPointXY(pt))
+            return
+        self.add_targets([self.hover])
+        self.end_selection()
 
     def on_finish(self, cancel=False):
-        if cancel or self.step == STEP_PICK:
+        if self.step == STEP_PICK and not cancel and self.targets:
+            self.end_selection()            # Entree / clic droit : fin de la designation
+        elif cancel or self.step == STEP_PICK:
             self.start()
         else:
             self.finish_step()
@@ -105,24 +157,108 @@ class TransformTool(DrawTool):
     def undo_point(self):
         self.start()
 
+    def add_targets(self, hits):
+        known = {_key(t) for t in self.targets}
+        for hit in hits:
+            if _key(hit) not in known:
+                known.add(_key(hit))
+                self.targets.append(hit)
+        self.target = self.targets[0] if self.targets else None
+
+    def end_selection(self):
+        """Fin de la designation : geometries des objets gardees dans le SCR de travail."""
+        self._work = {_key(t): self.frame.from_layer(t[1].geometry(), t[0]) for t in self.targets}
+        self.after_pick()
+
+    # ------------------------------------------------------------------
+    # Lasso : cliquer-glisser a l'etape de designation
+    # ------------------------------------------------------------------
+
+    def canvasPressEvent(self, event):
+        if (self.MULTI and self.step == STEP_PICK and self.dyn is not None
+                and event.button() == Qt.MouseButton.LeftButton):
+            self._press = event.pos()
+            self._dragged = False
+            self._lasso = [QgsPointXY(event.mapPoint())]
+
+    def _dragging(self, pos):
+        """Lasso en cours : une fois le seuil franchi, on le reste jusqu'au relachement."""
+        if self._press is not None and not self._dragged:
+            self._dragged = (pos - self._press).manhattanLength() >= LASSO_THRESHOLD
+        return self._press is not None and self._dragged
+
+    def canvasMoveEvent(self, event):
+        if self._dragging(event.pos()):
+            self._lasso.append(QgsPointXY(event.mapPoint()))
+            self.hover = None
+            if len(self._lasso) >= 3 and self.rb_lasso is not None:
+                self.rb_lasso.setToGeometry(QgsGeometry.fromPolygonXY([self._lasso]), None)
+            self.draw_extra()
+            return
+        super().canvasMoveEvent(event)
+
+    def canvasReleaseEvent(self, event):
+        dragged = event.button() == Qt.MouseButton.LeftButton and self._dragging(event.pos())
+        self._press = None
+        if not dragged:
+            self._lasso = []
+            super().canvasReleaseEvent(event)
+            return
+        points, self._lasso = self._lasso + [QgsPointXY(event.mapPoint())], []
+        if self.rb_lasso is not None:
+            self.rb_lasso.reset(T.POLYGON)
+        self.select_in_lasso(points)
+
+    def select_in_lasso(self, points):
+        """Ajoute a la designation les objets touches par le lasso (SCR de la carte)."""
+        if len(points) < 3:
+            return
+        lasso = QgsGeometry.fromPolygonXY([points + [points[0]]])
+        if not lasso.isGeosValid():
+            lasso = lasso.makeValid()
+        found = features_in_lasso(self.canvas(), editable_layers(self.plugin.iface), lasso)
+        hits = [(layer, f) for layer, feats in found.values() for f in feats]
+        if not hits:
+            self.plugin.warn(f"{self.NAME} : aucun objet dans le lasso.")
+            return
+        self.add_targets(hits)
+        self.configure(self.pick_prompt())
+        self.draw_extra()
+
+    # ------------------------------------------------------------------
+    # Apercu
+    # ------------------------------------------------------------------
+
     def draw_extra(self):
         if self.rb_obj is None:
             return
         self.rb_obj.reset(T.POLYGON)
-        hit = self.target or self.hover
-        if not hit:
-            return
-        layer, feature = hit
-        geom, attrs = None, {}
-        if self.step != STEP_PICK:
-            geom = self.preview_geometry(layer, feature)
-            if geom is not None:
-                attrs = self.transform_attrs(layer, feature)
-        # un texte est montre par son cadre (position, angle et taille apres transformation)
-        geom = hit_geometry(self.canvas(), layer, feature, geom, attrs.get("angle"), attrs.get("taille"))
-        if geom.type() != T.POLYGON:
-            geom = geom.buffer(pixel_size(self.canvas(), layer.crs()) * 2, 4)
-        self.rb_obj.setToGeometry(geom, layer)
+        self.rb_obj_lines.reset(T.LINE)
+        if self.step == STEP_PICK:
+            shown = list(self.targets)
+            if self.hover is not None and _key(self.hover) not in {_key(t) for t in shown}:
+                shown.append(self.hover)
+            outlines = [(layer, feature, None, {}) for layer, feature in shown]
+        else:
+            outlines = []
+            for layer, feature in self.targets:
+                geom = self.preview_geometry(layer, feature)
+                outlines.append((layer, feature, geom, self.transform_attrs(layer, feature) if geom is not None else {}))
+        polygons, lines = [], []
+        for layer, feature, geom, attrs in outlines:
+            # un texte est montre par son cadre (position, angle et taille apres transformation)
+            geom = hit_geometry(self.canvas(), layer, feature, geom, attrs.get("angle"), attrs.get("taille"))
+            if geom is None or geom.isNull():
+                continue
+            if geom.type() == T.LINE:
+                lines.append((geom, layer))
+                continue
+            if geom.type() != T.POLYGON:
+                geom = geom.buffer(pixel_size(self.canvas(), layer.crs()) * 2, 4)
+            polygons.append((geom, layer))
+        for rb, items in ((self.rb_obj, polygons), (self.rb_obj_lines, lines)):
+            for i, (geom, layer) in enumerate(items):
+                rb.addGeometry(geom, layer, i == len(items) - 1)     # un seul rafraichissement
 
     # ------------------------------------------------------------------
     # Outils communs
@@ -130,7 +266,8 @@ class TransformTool(DrawTool):
 
     def in_work(self, layer, feature):
         """Geometrie de l'objet dans le SCR de travail (metres vrais)."""
-        return self.frame.from_layer(feature.geometry(), layer)
+        geom = self._work.get((layer.id(), feature.id()))
+        return QgsGeometry(geom) if geom is not None else self.frame.from_layer(feature.geometry(), layer)
 
     def transformed(self, layer, feature, q):
         """Objet transforme par `q` dans le SCR de travail, rendu dans le SCR de sa couche."""
@@ -140,6 +277,23 @@ class TransformTool(DrawTool):
         """Centre de l'objet (d'un texte : centre de son cadre), SCR de travail."""
         c = hit_geometry(self.canvas(), layer, feature).centroid()
         return QgsPointXY(self.frame.from_layer(c, layer).asPoint())
+
+    def selection_box(self):
+        """Emprise des objets designes (d'un texte : son cadre), SCR de travail."""
+        box = None
+        for layer, feature in self.targets:
+            bb = self.frame.from_layer(hit_geometry(self.canvas(), layer, feature), layer).boundingBox()
+            if box is None:
+                box = QgsRectangle(bb)
+            else:
+                box.combineExtentWith(bb)
+        return box
+
+    def selection_center(self):
+        """Point de base par defaut (Entree) : centre de l'objet, ou de l'emprise de la selection."""
+        if len(self.targets) == 1:
+            return self.center_of(*self.target)
+        return self.selection_box().center()
 
     def transform_attrs(self, layer, feature):
         """Attributs a modifier avec la geometrie (angle / taille d'un texte)."""
@@ -172,59 +326,86 @@ class TransformTool(DrawTool):
         layer.triggerRepaint()
         return (layer.id(), feature.id(), old_geom, old)
 
-    def replace_geometry(self, new_geom, attrs=None, follow=False):
-        """Remplace la geometrie (et d'eventuels attributs) de l'objet designe (annulable).
-        `follow` : les cotes et angles poses sur l'objet suivent (meme annulation)."""
-        layer, feature = self.target
-        linked = self.linked_annotations(layer, feature) if follow and _kind(layer) not in LINKED_KINDS else []
-        items = []
-        if layer.customProperty(T.DRAFT_PROPERTY):
-            item = self._change_draft(layer, feature, new_geom, attrs)
-            if item is None:
-                self.plugin.warn(f"{self.NAME} refusé par « {layer.name()} ».")
-                return False
-            items.append(item)
-        else:
+    def apply_transform(self):
+        """Applique la transformation en cours a tous les objets designes."""
+        changes = []
+        for layer, feature in self.targets:
+            geom = self.transform_geometry(layer, feature)
+            if geom is not None:
+                changes.append((layer, feature, geom, self.transform_attrs(layer, feature)))
+        if changes:
+            self.replace_geometries(changes, follow=True)
+
+    def replace_geometries(self, changes, follow=False):
+        """changes : [(couche, objet, nouvelle geometrie, attributs)]. Brouillons : une seule
+        annulation pour tous (bouton Annuler) ; couche active : une commande d'edition par
+        couche (Ctrl+Z). `follow` : les cotes et angles poses sur les formes suivent."""
+        items, refused, done, edits = [], [], [], {}
+        for layer, feature, geom, attrs in changes:
+            if layer.customProperty(T.DRAFT_PROPERTY):
+                item = self._change_draft(layer, feature, geom, attrs)
+                if item is None:
+                    refused.append(layer.name())
+                else:
+                    items.append(item)
+                    done.append((layer, feature))
+            else:
+                edits.setdefault(layer.id(), (layer, []))[1].append((feature, geom))
+        for layer, geoms in edits.values():
             layer.beginEditCommand(f"{self.NAME} [Box_cad]")
-            if not layer.changeGeometry(feature.id(), new_geom):
+            if all(layer.changeGeometry(feature.id(), geom) for feature, geom in geoms):
+                layer.endEditCommand()
+                layer.triggerRepaint()
+                done += [(layer, feature) for feature, _ in geoms]
+            else:
                 layer.destroyEditCommand()
-                self.plugin.warn(f"{self.NAME} refusé par « {layer.name()} ».")
-                return False
-            layer.endEditCommand()
-            layer.triggerRepaint()
-        for ann_layer, ann_feature, ann_geom, ann_attrs in linked:
-            item = self._change_draft(ann_layer, ann_feature, ann_geom, ann_attrs)
-            if item is not None:
-                items.append(item)
-        if len(items) == 1 and layer.customProperty(T.DRAFT_PROPERTY):
+                refused.append(layer.name())
+        if refused:
+            self.plugin.warn(f"{self.NAME} refusé par « {' », « '.join(sorted(set(refused)))} ».")
+        if follow:
+            shapes = [hit for hit in done if _kind(hit[0]) not in LINKED_KINDS]
+            moved = {(layer.id(), feature.id()) for layer, feature, _, _ in changes}
+            for ann_layer, ann_feature, ann_geom, ann_attrs in self.linked_annotations(shapes, moved):
+                item = self._change_draft(ann_layer, ann_feature, ann_geom, ann_attrs)
+                if item is not None:
+                    items.append(item)
+        if len(items) == 1:
             self.plugin._set_undo(('draft_geom',) + items[0])
         elif items:
             self.plugin._set_undo(('draft_geoms', items))
-        return True
+        return bool(done)
 
-    def linked_annotations(self, layer, feature):
-        """Cotes et angles dont les points mesures sont sur l'objet : [(couche, objet,
-        nouvelle geometrie, attributs)]. Les deux points sur l'objet : la cote suit en bloc ;
-        un seul : ce point suit, la cote garde son decalage. Angle : son sommet (ou ses
-        deux cotes) sur l'objet, il suit en bloc."""
+    def linked_annotations(self, shapes, exclude=()):
+        """Cotes et angles dont les points mesures sont sur l'une des formes `shapes`
+        [(couche, objet)] : [(couche, objet, nouvelle geometrie, attributs)]. Les deux points
+        sur les formes : la cote suit en bloc ; un seul : ce point suit, la cote garde son
+        decalage. Angle : son sommet (ou ses deux cotes) sur les formes, il suit en bloc.
+        `exclude` : (couche, objet) deja transformes eux-memes (designes avec les formes)."""
         result = []
         q = self.qtransform()
-        if q is None:
+        if q is None or not shapes:
             return result
         frame = self.frame
-        shape = frame.from_layer(feature.geometry(), layer)        # tout se calcule dans le SCR de travail
         tol = LINK_TOLERANCE_PX * frame.pixel()
+        works = [self.in_work(layer, feature) for layer, feature in shapes]   # tout en SCR de travail
+        boxes = [w.boundingBox().buffered(tol) for w in works]
 
         def on(p):
-            return shape.distance(QgsGeometry.fromPointXY(p)) <= tol
+            pt = QgsGeometry.fromPointXY(p)
+            return any(box.contains(p) and w.distance(pt) <= tol for w, box in zip(works, boxes))
 
-        zone = QgsGeometry.fromRect(shape.boundingBox().buffered(tol))
+        zone = QgsRectangle(boxes[0])
+        for box in boxes[1:]:
+            zone.combineExtentWith(box)
+        zone = QgsGeometry.fromRect(zone)
         for ann in QgsProject.instance().mapLayers().values():
             kind = _kind(ann)
-            if kind not in LINKED_KINDS or ann is layer:
+            if kind not in LINKED_KINDS:
                 continue
             request = QgsFeatureRequest().setFilterRect(frame.to_layer(zone, ann).boundingBox())
             for f in ann.getFeatures(request):
+                if (ann.id(), f.id()) in exclude:
+                    continue
                 g = frame.from_layer(f.geometry(), ann)
                 if kind == "dimension":
                     parts = dimension_parts(g)
@@ -281,6 +462,10 @@ class MoveTool(TransformTool):
     NAME = "Déplacer"
     STEP_BASE, STEP_DEST = 1, 2
     dest = None
+    GUIDE_STEPS = ("Objets", "Point de base", "Point d'arrivée")
+    GUIDE_HINTS = (PICK_HINT,
+                   "Cliquez le point de base : un coin, un centre… (accrochage objet).",
+                   "Cliquez le point d'arrivée, ou tapez la <b>longueur</b> (Tab : <b>angle</b>) puis Entrée.")
 
     def after_pick(self):
         self.step = self.STEP_BASE
@@ -321,15 +506,16 @@ class MoveTool(TransformTool):
         return self.transformed(layer, feature, q) if q is not None else None
 
     def moved_work(self, layer, feature):
-        """Objet deplace, SCR de travail ; une cote ou un angle : seule la ligne de cote
-        / l'arc se deplace."""
+        """Objet deplace, SCR de travail ; une cote ou un angle designe seul : seule la
+        ligne de cote / l'arc se deplace (avec d'autres objets, il suit en bloc)."""
         q = self.qtransform()
         if q is None:
             return None
         geom = self.in_work(layer, feature)
-        if _kind(layer) == "dimension":
+        alone = len(self.targets) == 1
+        if alone and _kind(layer) == "dimension":
             return moved_dimension(geom, q.dx(), q.dy())
-        if _kind(layer) == "angle":
+        if alone and _kind(layer) == "angle":
             return moved_angle(geom, q.dx(), q.dy())
         return G.transformed(geom, q)
 
@@ -347,15 +533,18 @@ class MoveTool(TransformTool):
         return {}
 
     def place(self):
-        geom = self.move_geometry(*self.target)
-        if geom is not None:
-            self.replace_geometry(geom, self.transform_attrs(*self.target), follow=True)
+        self.apply_transform()
         self.start()
 
 
 class CopyTool(MoveTool):
-    """COPIER : objet -> point de base -> chaque clic pose une copie ; Entree/Echap termine."""
+    """COPIER : objet(s) -> point de base -> chaque clic pose une copie ; Entree/Echap termine."""
     NAME = "Copier"
+    GUIDE_STEPS = ("Objets", "Point de base", "Copies")
+    GUIDE_HINTS = (PICK_HINT,
+                   "Cliquez le point de base : un coin, un centre… (accrochage objet).",
+                   "Chaque clic pose une copie (ou tapez <b>longueur</b>, Tab : <b>angle</b>, puis Entrée). "
+                   "<b>Entrée</b> ou <b>Échap</b> : terminer.")
 
     def transform_geometry(self, layer, feature):
         # une copie est toujours un double complet (cote comprise), pose au point d'arrivee
@@ -371,26 +560,44 @@ class CopyTool(MoveTool):
             self.start()
 
     def place(self):
-        layer, feature = self.target
-        geom = self.offset_geometry(layer, feature)
-        if geom is None:
+        """Une copie de chaque objet designe ; brouillons : une seule annulation."""
+        if self.qtransform() is None:
             return
-        if layer.customProperty(T.DRAFT_PROPERTY):
-            copy = QgsFeature(feature)
-            copy.setGeometry(geom)
-            ok, added = layer.dataProvider().addFeatures([copy])
-            if ok and added:
-                self.plugin._set_undo(('add_features', layer.id(), [added[0].id()]))
+        drafts, active = {}, {}
+        for layer, feature in self.targets:
+            geom = self.offset_geometry(layer, feature)
+            if geom is not None:
+                group = drafts if layer.customProperty(T.DRAFT_PROPERTY) else active
+                group.setdefault(layer.id(), (layer, []))[1].append((feature, geom))
+        added = []
+        for layer_id, (layer, items) in drafts.items():
+            copies = []
+            for feature, geom in items:
+                copy = QgsFeature(feature)
+                copy.setGeometry(geom)
+                copies.append(copy)
+            ok, new = layer.dataProvider().addFeatures(copies)
+            if ok and new:
+                added.append((layer_id, [f.id() for f in new]))
                 layer.triggerRepaint()
-        else:
+        if len(added) == 1:
+            self.plugin._set_undo(('add_features',) + added[0])
+        elif added:
+            self.plugin._set_undo(('add_features_multi', added))
+        for layer, items in active.values():
             # createFeature : attributs recopies SAUF la cle primaire (fid GPKG...), valeurs
             # par defaut et contraintes d'unicite gerees ; pas de copie des objets lies par
             # relation (duplicateFeature les recopierait sans limite de profondeur)
             pk = set(layer.primaryKeyAttributes())
-            attrs = {i: v for i, v in enumerate(feature.attributes()) if i not in pk}
-            new = QgsVectorLayerUtils.createFeature(layer, geom, attrs, layer.createExpressionContext())
+            context = layer.createExpressionContext()
             layer.beginEditCommand("Copier [Box_cad]")
-            if layer.addFeature(new):
+            ok = True
+            for feature, geom in items:
+                attrs = {i: v for i, v in enumerate(feature.attributes()) if i not in pk}
+                if not layer.addFeature(QgsVectorLayerUtils.createFeature(layer, geom, attrs, context)):
+                    ok = False
+                    break
+            if ok:
                 layer.endEditCommand()
                 layer.triggerRepaint()
             else:
@@ -409,6 +616,10 @@ class RotateTool(TransformTool):
     """ROTATION : objet -> point de base (Entree : centre de l'objet) -> angle anti-horaire."""
     NAME = "Rotation"
     STEP_BASE, STEP_ANGLE = 1, 2
+    GUIDE_STEPS = ("Objets", "Point de base", "Angle")
+    GUIDE_HINTS = (PICK_HINT,
+                   "Cliquez le centre de rotation ; <b>Entrée</b> : centre de l'objet (ou de la sélection).",
+                   "Tournez à la souris et cliquez, ou tapez l'<b>angle</b> (sens anti-horaire) puis Entrée.")
 
     def __init__(self, canvas, plugin, action):
         super().__init__(canvas, plugin, action)
@@ -444,7 +655,7 @@ class RotateTool(TransformTool):
 
     def finish_step(self):
         if self.step == self.STEP_BASE:      # Entree : centre de l'objet comme point de base
-            self.base = self.center_of(*self.target)
+            self.base = self.selection_center()
             self._ask_angle()
         else:
             self._apply()
@@ -470,8 +681,7 @@ class RotateTool(TransformTool):
         return {"angle": round((_number(feature["angle"], 0.0) + self.angle) % 360.0, 2)}
 
     def _apply(self):
-        self.replace_geometry(self.transform_geometry(*self.target), self.transform_attrs(*self.target),
-                              follow=True)
+        self.apply_transform()
         self.start()
 
 
@@ -483,6 +693,10 @@ class MirrorTool(TransformTool):
     """MIROIR : objet -> 1er point de l'axe -> 2e point (angle) ; objet retourne sur place."""
     NAME = "Miroir"
     STEP_P1, STEP_P2 = 1, 2
+    GUIDE_STEPS = ("Objets", "Axe : 1er point", "Axe : 2e point")
+    GUIDE_HINTS = (PICK_HINT,
+                   "Cliquez un premier point de l'axe de symétrie (accrochage objet).",
+                   "Cliquez le second point de l'axe, ou tapez son <b>angle</b> : l'objet est retourné sur place.")
 
     def __init__(self, canvas, plugin, action):
         super().__init__(canvas, plugin, action)
@@ -539,9 +753,7 @@ class MirrorTool(TransformTool):
         return {"angle": round(a, 2)}
 
     def _apply(self):
-        geom = self.transform_geometry(*self.target)
-        if geom is not None:
-            self.replace_geometry(geom, self.transform_attrs(*self.target), follow=True)
+        self.apply_transform()
         self.start()
 
 
@@ -556,6 +768,13 @@ class ScaleTool(TransformTool):
     NAME = "Échelle"
     STEP_BASE, STEP_FACTOR = 1, 2
     HANDLED_EXTRA = "R"
+    GUIDE_STEPS = ("Objets", "Point de base", "Facteur")
+    GUIDE_HINTS = (PICK_HINT,
+                   "Cliquez le point fixe ; <b>Entrée</b> : centre de l'objet (ou de la sélection).",
+                   "Tapez le <b>facteur</b> (2 = double) ou réglez-le à la souris, puis cliquez. "
+                   "<b>R</b> : par référence.")
+    REFERENCE_HINT = ("Tapez la <b>longueur actuelle</b>, Tab, puis la <b>nouvelle longueur</b> (ou à la souris). "
+                      "<b>R</b> : revenir au facteur.")
 
     def __init__(self, canvas, plugin, action):
         super().__init__(canvas, plugin, action)
@@ -571,10 +790,14 @@ class ScaleTool(TransformTool):
         self.step = self.STEP_BASE
         self.configure("Point de base (Entrée : centre de l'objet) :")
 
+    def guide_hint(self, index):
+        if index == self.STEP_FACTOR and self.reference:
+            return self.REFERENCE_HINT
+        return super().guide_hint(index)
+
     def _size(self):
-        """Distance souris qui vaut un facteur 1 : demi-diagonale de l'emprise de l'objet."""
-        layer, feature = self.target
-        bb = self.in_work(layer, feature).boundingBox()
+        """Distance souris qui vaut un facteur 1 : demi-diagonale de l'emprise des objets."""
+        bb = self.selection_box()
         return max((bb.width() ** 2 + bb.height() ** 2) ** 0.5 / 2, self.frame.pixel() * 10)
 
     def _ask_factor(self):
@@ -625,7 +848,7 @@ class ScaleTool(TransformTool):
 
     def finish_step(self):
         if self.step == self.STEP_BASE:
-            self.base = self.center_of(*self.target)
+            self.base = self.selection_center()
             self._ask_factor()
         else:
             self._apply()
@@ -647,9 +870,7 @@ class ScaleTool(TransformTool):
         return {"taille": max(1.0, round(_number(feature["taille"], 10.0) * self.factor, 1))}
 
     def _apply(self):
-        geom = self.transform_geometry(*self.target)
-        if geom is not None:
-            self.replace_geometry(geom, self.transform_attrs(*self.target), follow=True)
+        self.apply_transform()
         self.start()
 
 
@@ -672,9 +893,9 @@ class AlignTool(TransformTool):
         STEP_SCALE: "Mettre à l'échelle ? (O : oui, N ou Entrée : non)",
     }
     # bandeau d'aide : une ligne d'etapes, une ligne de consigne, une ligne de touches
-    GUIDE_STEPS = ("Objet", "Point source 1", "Destination 1", "Point source 2", "Destination 2", "Échelle")
+    GUIDE_STEPS = ("Objets", "Point source 1", "Destination 1", "Point source 2", "Destination 2", "Échelle")
     GUIDE_HINTS = {
-        STEP_PICK: "Cliquez l'objet à aligner : forme dessinée, ou objet de la couche active en édition.",
+        STEP_PICK: PICK_HINT,
         STEP_S1: "Cliquez un point de l'objet (un coin par exemple) : il viendra sur la 1re destination.",
         STEP_D1: "Cliquez l'endroit où ce point doit arriver.",
         STEP_S2: "Cliquez un 2e point de l'objet (en bleu) : il donne la direction. <b>Entrée</b> : simple déplacement.",
@@ -682,7 +903,7 @@ class AlignTool(TransformTool):
         STEP_SCALE: "<b>O</b> : ajuster aussi la taille aux destinations · <b>N</b> ou <b>Entrée</b> : "
                     "garder la taille.",
     }
-    GUIDE_KEYS = "<i>U : point précédent · Échap : recommencer · F3 : accrochage objet</i>"
+    GUIDE_KEYS = "U : point précédent · Échap : recommencer · F3 : accrochage objet"
 
     def __init__(self, canvas, plugin, action):
         super().__init__(canvas, plugin, action)
@@ -691,11 +912,8 @@ class AlignTool(TransformTool):
         self.dest = None        # destination sous la souris
         self.scale = False
         self.rb_pairs = None
-        self.guide_item = self.guide_label = None
-        self.guide_closed = False
 
     def activate(self):
-        self.guide_closed = False
         super().activate()
         self.rb_pairs = QgsRubberBand(self.canvas(), T.LINE)
         self.rb_pairs.setStrokeColor(ACCENT)
@@ -703,7 +921,6 @@ class AlignTool(TransformTool):
         self.rb_pairs.setWidth(1)
 
     def deactivate(self):
-        self._hide_guide()
         if self.rb_pairs is not None:
             self.canvas().scene().removeItem(self.rb_pairs)
             self.rb_pairs = None
@@ -712,46 +929,10 @@ class AlignTool(TransformTool):
     def start(self):
         super().start()
         self.pairs, self.pending, self.dest, self.scale = [], None, None, False
-        self._show_guide()
 
     def _ask(self, step):
         self.step = step
         self.configure(self.PROMPTS[step])
-        self._show_guide()
-
-    def _guide_html(self):
-        steps = " › ".join(
-            f"<b><u>{name}</u></b>" if i == self.step else (f"✓ {name}" if i < self.step else name)
-            for i, name in enumerate(self.GUIDE_STEPS))
-        return f"<b>Aligner</b> : {steps}<br>{self.GUIDE_HINTS[self.step]}<br>{self.GUIDE_KEYS}"
-
-    def _show_guide(self):
-        """Bandeau bleu en haut de la carte : etapes d'ALIGNER, etape en cours soulignee.
-        Lignes coupees a la main : avec le retour a la ligne automatique, la barre de
-        messages garde la hauteur calculee sur la largeur initiale. Largeur minimale
-        1 px : le bandeau ne doit jamais elargir la fenetre QGIS. Ferme par sa croix,
-        il ne revient qu'a la prochaine activation de l'outil."""
-        if self.dyn is None or self.guide_closed:
-            return
-        bar = self.plugin.iface.messageBar()
-        if self.guide_item is not None and (sip.isdeleted(self.guide_item) or self.guide_item not in bar.items()):
-            self.guide_item = self.guide_label = None       # ferme (croix, « Tout fermer »)
-            self.guide_closed = True
-            return
-        if self.guide_item is None:
-            self.guide_label = QLabel()
-            self.guide_label.setTextFormat(Qt.TextFormat.RichText)
-            self.guide_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-            self.guide_label.setMinimumWidth(1)
-            self.guide_item = QgsMessageBarItem(self.guide_label, Qgis.MessageLevel.Info, 0)
-            bar.pushItem(self.guide_item)
-        self.guide_label.setText(self._guide_html())
-
-    def _hide_guide(self):
-        item, self.guide_item, self.guide_label = self.guide_item, None, None
-        bar = self.plugin.iface.messageBar()
-        if item is not None and not sip.isdeleted(item) and item in bar.items():
-            bar.popWidget(item)
 
     def after_pick(self):
         self._ask(self.STEP_S1)
@@ -897,9 +1078,7 @@ class AlignTool(TransformTool):
 
     def _apply(self, scale):
         self.scale = scale
-        geom = self.transform_geometry(*self.target)
-        if geom is not None:
-            self.replace_geometry(geom, self.transform_attrs(*self.target), follow=True)
+        self.apply_transform()
         self.start()
 
 

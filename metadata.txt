@@ -8,16 +8,20 @@ about=FR: Barre d'outils de nettoyage rapide de l'affichage, inspiree des logici
     masquer une couche ou une entite par clic, supprimer des entites par clic ou au lasso (avec confirmation),
     tout afficher / tout eteindre, trier les couches par type de geometrie et changer l'ordre d'une couche par clic.
     Barre Dessin : ligne, polyligne, rectangle (orientable), carre et cercle avec longueurs et angles tapes
-    pres du curseur, accrochage et ortho ; deplacer, copier, rotation, miroir, echelle et aligner comme en DAO ;
-    mesures en metres vrais quel que soit le SCR du projet.
+    pres du curseur, accrochage et ortho ; deplacer, copier, rotation, miroir, echelle et aligner comme en DAO,
+    sur un ou plusieurs objets (lasso) ; bandeau d'aide pas a pas ; mesures en metres vrais quel que soit le SCR du projet.
     Chaque action est annulable. Auteur : Yoan Laloux - https://www.linkedin.com/in/ylaloux/
     EN: Quick display cleanup toolbar, CAD-software style: locate a feature's layer by click, hide a layer or a feature by click,
     delete features by click or lasso (with confirmation), show all / hide all, sort layers by geometry type
     and reorder a layer by click. Drawing toolbar: line, polyline, rectangle (rotatable), square and circle with
-    typed lengths and angles next to the cursor, snapping and ortho; CAD-style move, copy, rotate, mirror, scale and align;
-    true metres in any project CRS. Every action can be undone. Author: Yoan Laloux - https://www.linkedin.com/in/ylaloux/
-version=1.2.2
-changelog=1.2.2
+    typed lengths and angles next to the cursor, snapping and ortho; CAD-style move, copy, rotate, mirror, scale and align
+    on one or several features (lasso); step-by-step help banner; true metres in any project CRS. Every action can be undone. Author: Yoan Laloux - https://www.linkedin.com/in/ylaloux/
+version=1.3.0
+changelog=1.3.0
+    - Plusieurs objets au lasso pour deplacer, copier, rotation, miroir, echelle et aligner, un seul Annuler / several features at once by lasso, single undo
+    - Bandeau d'aide sur tous les outils de dessin, a couper dans Modes de dessin / help banner on every drawing tool, can be turned off
+    - Lasso referme pres de son depart bien reconnu (Gomme, Supprimer) ; textes repris par le lasso / closed lasso no longer taken for a click; texts caught by the lasso
+    1.2.2
     - Formulation facon DAO, logo et badge de la fenetre A propos / CAD-style wording, new About logo and badge
     1.2.1
     - Message de SCR de travail raccourci, il tient sur une ligne / shorter work CRS message

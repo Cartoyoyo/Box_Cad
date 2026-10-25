@@ -18,7 +18,7 @@ UNDO_LABELS = {
     'layer': "masquage de couche", 'feature': "masquage d'entité", 'all_layers': "Tout éteindre",
     'delete_features_multi': "suppression", 'sort': "tri des couches", 'add_features': "ajout de forme",
     'draft_erase': "gomme", 'draft_geom': "modification de forme", 'draft_attrs': "propriétés",
-    'draft_geoms': "modification de forme et de ses cotes",
+    'draft_geoms': "modification de plusieurs objets", 'add_features_multi': "copie",
 }
 
 
@@ -94,6 +94,9 @@ class LayerPicker:
         else:
             self.osnap_modes = {key for key, _ in OSNAP_MODES}
         self.action_fill = None
+        from .draw.guide import GUIDE_KEY
+        self.draw_guide = QSettings().value(GUIDE_KEY, True, type=bool)   # bandeau d'aide des outils
+        self.action_guide = None
         self._actions = []
         self._action_menu = {}   # action -> menu Extensions qui la contient
         # dict[action -> fabrique du map tool] et dict[action -> map tool actif]
@@ -105,7 +108,8 @@ class LayerPicker:
         #            | ('all_layers', [ids]) | ('delete_features_multi', {layer_id: [QgsFeature]})
         #            | ('sort', [(group, [layer_id, ...])]) | ('add_features', layer_id, [fid])
         #            | ('draft_erase', {layer_id: [QgsFeature]}) | ('draft_geom', layer_id, fid, old_geom)
-        #            | ('draft_geoms', [(layer_id, fid, old_geom, old_attrs)])  forme + cotes associees
+        #            | ('draft_geoms', [(layer_id, fid, old_geom, old_attrs)])  formes + cotes associees
+        #            | ('add_features_multi', [(layer_id, [fid])])  copies dans plusieurs brouillons
         self._undo = []         # pile d'annulation (la plus recente en dernier)
         # dict[layer_id] -> [cle SQL, ...] entites masquees par subsetString
         self._hidden_features = {}
@@ -287,7 +291,8 @@ class LayerPicker:
         self.draw_toolbar = self.iface.mainWindow().addToolBar("Box_cad Dessin")
         self.draw_toolbar.setObjectName("BoxCadDrawToolBar")
         keys = " Tapez une valeur, Tab pour le champ suivant, Entrée pour valider, Échap pour annuler."
-        pick = " Formes dessinées, ou objet de la couche active en édition."
+        pick = (" Formes dessinées, ou objets de la couche active en édition ; cliquer-glisser pour en "
+                "entourer plusieurs, puis Entrée.")
         groups = [
             ("tracer", "Tracer", [
                 ("draw_line.svg", "Ligne", "LIGNE : segments enchaînés, une entité par segment (longueur, angle)." + keys,
@@ -364,6 +369,12 @@ class LayerPicker:
             "draw_ortho.svg", "Mode ortho (F8)", "Ortho : segments horizontaux ou verticaux uniquement",
             checkable=True, toolbar=self.draw_toolbar, menu=MENU_DRAW)
         self.action_ortho.toggled.connect(self._set_ortho)
+        self.action_guide = self._add_action(
+            "draw_guide.svg", "Bandeau d'aide",
+            "Bandeau bleu en haut de la carte pendant les outils de dessin : étapes, consigne, touches",
+            checkable=True, toolbar=False, menu=MENU_DRAW)
+        self.action_guide.setChecked(self.draw_guide)
+        self.action_guide.toggled.connect(self._set_guide)
         self.draw_toolbar.addSeparator()
         self._init_props_chip()
 
@@ -547,6 +558,17 @@ class LayerPicker:
     def _set_ortho(self, checked):
         self.draw_ortho = checked
 
+    def _set_guide(self, checked):
+        from .draw.guide import GUIDE_KEY
+        self.draw_guide = checked
+        QSettings().setValue(GUIDE_KEY, checked)
+        tool = self.iface.mapCanvas().mapTool()
+        banner = getattr(tool, "banner", None)
+        if banner is not None and checked:
+            banner.closed = False           # rallume aussi un bandeau ferme par sa croix
+        if hasattr(tool, "update_guide"):
+            tool.update_guide()
+
     def _plugin_root_menu(self):
         """Sous-menu Extensions → Box_cad (ou None)."""
         for action in self.iface.pluginMenu().actions():
@@ -570,7 +592,8 @@ class LayerPicker:
             ("Ordre des couches", [self.action_to_top, self.action_move_up, self.action_move_down,
                                    self.action_to_bottom, None, self.action_sort_geom]),
         ] + self._draw_groups + [
-            ("Modes de dessin", [self.action_fill, self.action_osnap, self.action_ortho]),
+            ("Modes de dessin", [self.action_fill, self.action_osnap, self.action_ortho, None,
+                                 self.action_guide]),
         ]
         for title, actions in themes:
             submenu = QMenu(title, self.iface.mainWindow())
@@ -693,6 +716,9 @@ class LayerPicker:
             op = entry[0]
             if op == 'add_features' and entry[1] == layer_id:
                 self._undo[i] = (op, layer_id, [mapping.get(f, f) for f in entry[2]])
+            elif op == 'add_features_multi':
+                self._undo[i] = (op, [(lid, [mapping.get(f, f) for f in fids] if lid == layer_id else fids)
+                                      for lid, fids in entry[1]])
             elif op in ('draft_geom', 'draft_attrs') and entry[1] == layer_id and entry[2] in mapping:
                 self._undo[i] = (op, layer_id, mapping[entry[2]]) + tuple(entry[3:])
             elif op == 'draft_geoms':
@@ -877,12 +903,12 @@ class LayerPicker:
                         self._remap_fids(layer_id, {f.id(): a.id() for f, a in zip(feats, added)})
                     layer.triggerRepaint()
 
-        elif op == 'add_features':
-            _, layer_id, fids = entry
-            layer = project.mapLayer(layer_id)
-            if layer:
-                layer.dataProvider().deleteFeatures(fids)
-                layer.triggerRepaint()
+        elif op in ('add_features', 'add_features_multi'):
+            for layer_id, fids in (entry[1] if op == 'add_features_multi' else [entry[1:]]):
+                layer = project.mapLayer(layer_id)
+                if layer:
+                    layer.dataProvider().deleteFeatures(fids)
+                    layer.triggerRepaint()
 
         elif op == 'sort':
             _, orders = entry

@@ -50,6 +50,10 @@ class TextDialog(QDialog):
 
 class TextTool(DrawTool):
     TOOL_NAME = "texte"
+    GUIDE_STEPS = ("Point d'insertion", "Angle", "Texte")
+    GUIDE_HINTS = ("Cliquez où commence le texte (en bas à gauche).",
+                   "Orientez à la souris et cliquez, ou tapez l'<b>angle</b> ; <b>Entrée</b> : horizontal. "
+                   "Le texte et sa taille se saisissent ensuite.")
 
     def __init__(self, canvas, plugin, action):
         super().__init__(canvas, plugin, action)

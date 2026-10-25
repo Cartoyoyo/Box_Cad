@@ -39,6 +39,7 @@ class MapToolDeleteFeature(ClickTool):
     def __init__(self, canvas, plugin, action):
         super().__init__(canvas, plugin, action)
         self._start_pos = None
+        self._dragged = False                # la souris s'est eloignee du clic : c'est un lasso
         self._rubber_band = None
         self._lasso_points = []              # points carte du lasso en cours
         self._pending = {}                   # dict[layer_id -> [QgsFeature]]
@@ -56,6 +57,7 @@ class MapToolDeleteFeature(ClickTool):
         # Bouton gauche : preparer le lasso libre
         self._cleanup_rubber_band()
         self._start_pos = event.pos()
+        self._dragged = False
         self._rubber_band = QgsRubberBand(self.canvas(), _POLYGON_GEOM)
         self._rubber_band.setColor(QColor(220, 50, 50, 50))
         self._rubber_band.setStrokeColor(QColor(200, 0, 0, 200))
@@ -98,10 +100,11 @@ class MapToolDeleteFeature(ClickTool):
         self._rubber_band.addPoint(pt, True)
 
     def _is_drag(self, pos):
-        return (
-            self._start_pos is not None
-            and (pos - self._start_pos).manhattanLength() >= DRAG_THRESHOLD
-        )
+        """Une fois le seuil franchi pendant l'appui, on reste en lasso jusqu'au relachement
+        (un lasso se referme souvent pres de son point de depart)."""
+        if self._start_pos is not None and not self._dragged:
+            self._dragged = (pos - self._start_pos).manhattanLength() >= DRAG_THRESHOLD
+        return self._start_pos is not None and self._dragged
 
     # ------------------------------------------------------------------
     # Construction geometrie lasso

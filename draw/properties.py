@@ -108,6 +108,11 @@ class PropertiesDialog(QDialog):
 class PropertiesTool(TransformTool):
     """Clic sur une forme dessinee -> fenetre ; Entree sans objet -> proprietes courantes."""
     NAME = "Propriétés"
+    MULTI = False
+    GUIDE_STEPS = ("Forme",)
+    GUIDE_HINTS = ("Cliquez une forme dessinée : couleur, épaisseur, trait, remplissage, texte. "
+                   "<b>Entrée</b> : propriétés des prochains dessins.",)
+    GUIDE_KEYS = "La pastille de la barre Dessin ouvre aussi les propriétés courantes"
 
     def start(self):
         super().start()

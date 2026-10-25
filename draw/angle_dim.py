@@ -168,6 +168,19 @@ def pick_segment(canvas, map_point, crs=None):
 
 class AngleTool(DrawTool):
     TOOL_NAME = "angle"
+    # deux facons de donner l'angle : deux lignes, ou un sommet et un point sur chaque cote
+    GUIDE_LINES = ("Première ligne", "Seconde ligne", "Arc")
+    GUIDE_POINTS = ("Sommet", "Premier côté", "Second côté", "Arc")
+    GUIDE_HINTS = {
+        STEP_LINE1: "Cliquez une première ligne (côté d'une forme, segment). <b>Entrée</b> : donner plutôt "
+                    "un sommet et deux points.",
+        STEP_LINE2: "Cliquez la seconde ligne.",
+        STEP_VERTEX: "Cliquez le sommet de l'angle (accrochage objet).",
+        STEP_P1: "Cliquez un point du premier côté, ou tapez la <b>longueur</b> (Tab : <b>angle</b>) puis Entrée.",
+        STEP_P2: "Cliquez un point du second côté, ou tapez la <b>longueur</b> (Tab : <b>angle</b>) puis Entrée.",
+        STEP_ARC: "Placez l'arc à la souris et cliquez : le côté choisi donne l'angle, son supplémentaire "
+                  "ou l'angle rentrant. Tapez le <b>rayon</b> au besoin.",
+    }
 
     def __init__(self, canvas, plugin, action):
         super().__init__(canvas, plugin, action)
@@ -197,6 +210,19 @@ class AngleTool(DrawTool):
 
     def wants_osnap(self):
         return self.step not in (STEP_LINE1, STEP_LINE2)
+
+    def guide_text(self):
+        by_lines = self.step in (STEP_LINE1, STEP_LINE2) or (self.step == STEP_ARC and self.segments)
+        self.GUIDE_STEPS = self.GUIDE_LINES if by_lines else self.GUIDE_POINTS
+        return super().guide_text()
+
+    def guide_step(self):
+        if self.step == STEP_ARC:
+            return len(self.GUIDE_STEPS) - 1
+        return self.step if self.step < STEP_VERTEX else self.step - STEP_VERTEX
+
+    def guide_hint(self, index):
+        return self.GUIDE_HINTS[self.step]
 
     def compute(self, mouse):
         self.hover_segment = None

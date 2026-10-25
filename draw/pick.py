@@ -1,4 +1,5 @@
-"""Recherche de l'objet sous le curseur, partagee par la gomme et la rotation."""
+"""Recherche des objets sous le curseur ou dans un lasso, partagee par la gomme et les
+transformations."""
 from qgis.core import (
     QgsCoordinateTransform, QgsFeature, QgsFeatureRequest, QgsGeometry, QgsPointXY,
     QgsProject, QgsRectangle, QgsVectorLayer,
@@ -169,3 +170,26 @@ def pick_feature(canvas, layers, map_point):
             if best is None or key < best[0]:
                 best = (key, layer, QgsFeature(f))
     return (best[1], best[2]) if best else None
+
+
+def features_in_lasso(canvas, layers, lasso):
+    """Objets touches par le lasso (polygone dans le SCR de la carte) ; un texte compte par
+    son cadre. Retourne {layer_id: (couche, [QgsFeature])}."""
+    found = {}
+    for layer in layers:
+        geom = to_layer(lasso, canvas, layer)
+        engine = QgsGeometry.createGeometryEngine(geom.constGet())
+        engine.prepareGeometry()
+        box = geom.boundingBox()
+        if is_text_layer(layer):
+            box.grow(TEXT_SEARCH_PX * pixel_size(canvas, layer.crs()))
+        feats = []
+        for f in layer.getFeatures(QgsFeatureRequest().setFilterRect(box)):
+            if not f.hasGeometry():
+                continue
+            hit = hit_geometry(canvas, layer, f)     # variable : la geometrie doit vivre pendant le test
+            if engine.intersects(hit.constGet()):
+                feats.append(QgsFeature(f))
+        if feats:
+            found[layer.id()] = (layer, feats)
+    return found

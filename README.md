@@ -7,7 +7,7 @@
 **Deux barres d'outils QGIS façon DAO : nettoyer l'affichage d'un clic sur la carte, et dessiner à la cote**
 
 [![QGIS](https://img.shields.io/badge/QGIS-3.16%2B-green?logo=qgis&logoColor=white)](https://qgis.org)
-[![Version](https://img.shields.io/badge/version-1.2.2-blue)](metadata.txt)
+[![Version](https://img.shields.io/badge/version-1.3.0-blue)](metadata.txt)
 [![License](https://img.shields.io/badge/license-GPL%20v3-orange)](LICENSE)
 [![Docs](https://img.shields.io/badge/docs-FR%20%7C%20EN%20%7C%20ES%20%7C%20PT%20%7C%20DE-lightgrey)](#français)
 
@@ -27,12 +27,17 @@
 | Barre Dessin · Drawing toolbar | Saisie près du curseur · Dynamic input |
 |:---:|:---:|
 | ![Barre Box_cad Dessin](screenshot/barre_dessin.png) | <img src="screenshot/saisie_dynamique.png" width="420" alt="Saisie dynamique"/> |
-| Tracer ▾ — Modifier ▾ — Annoter ▾ — remplissage — accrochage (F3) — ortho (F8)<br>pastille : couleur, épaisseur et couche qui reçoit le dessin | Valeurs près du curseur ;<br>étape, champs et touches dans la barre d'état |
+| Tracer ▾ — Modifier ▾ — Annoter ▾ — remplissage — accrochage (F3) — ortho (F8)<br>pastille : couleur, épaisseur et couche qui reçoit le dessin | Valeurs près du curseur, bandeau d'aide en haut ;<br>étape, champs et touches dans la barre d'état |
 
 | Aligner · Align | Mètres vrais dans tout SCR · True metres in any CRS |
 |:---:|:---:|
 | <img src="screenshot/aligner.png" width="420" alt="Aligner"/> | <img src="screenshot/scr_metres.png" width="420" alt="Mesures en mètres vrais"/> |
 | Bandeau d'aide pas à pas ; 1re paire en pointillés,<br>objet aligné en bleu, accrochage sur le coin visé | Projet en Web Mercator : 10 m tapés = 10 m vrais<br>(calcul en Lambert 93), cotes et surfaces justes |
+
+| Plusieurs objets au lasso · Lasso selection | Bandeau d'aide · Help banner |
+|:---:|:---:|
+| <img src="screenshot/selection_lasso.png" width="420" alt="Sélection au lasso"/> | <img src="screenshot/bandeau_cote.png" width="420" alt="Bandeau d'aide"/> |
+| Déplacer : 2 objets déjà désignés (en bleu), 2e lasso en cours ;<br>Entrée ou clic droit pour passer au point de base | Sur tous les outils de dessin : étapes, consigne, touches ;<br>à couper dans *Modes de dessin → Bandeau d'aide* |
 
 | À propos · About |
 |:---:|
@@ -70,6 +75,8 @@ Fini les allers-retours entre la carte et un panneau de couches de 40 lignes : c
 
 - **Bouton à menu « Ordre des couches »** : le tri et les 4 outils d'ordre partagent un seul bouton, qui affiche le dernier utilisé (un clic le relance, la flèche ouvre la liste).
 - **Cotes associatives** : Déplacer, Rotation, Miroir, Échelle ou Aligner d'une forme entraîne les cotes et angles posés sur elle (longueur recalculée ; une cote accrochée à un seul coin s'allonge) ; un seul Annuler remet le tout. Déplacer une cote ou un angle ne bouge que la ligne de cote ou l'arc : les points mesurés restent, les rappels s'adaptent.
+- **Plusieurs objets (Déplacer, Copier, Rotation, Miroir, Échelle, Aligner)** : cliquer-glisser entoure des objets (lasso, comme la Gomme), autant de fois que voulu ; **Entrée** ou **clic droit** passe au point de base, un clic sur un objet l'ajoute et passe aussi à la suite. Un clic simple sur un objet seul enchaîne directement, comme avant. Les cotes posées entre deux formes désignées suivent en bloc ; un seul Annuler remet tout le lot (Ctrl+Z pour la couche active en édition). Rotation et Échelle : Entrée prend le centre de la sélection.
+- **Bandeau d'aide** : pendant chaque outil de dessin, un bandeau bleu en haut de la carte montre les étapes (faites cochées, en cours soulignée), la consigne de l'étape et les touches utiles. Sa croix le ferme jusqu'à la prochaine activation de l'outil ; *Modes de dessin → Bandeau d'aide* le coupe pour de bon (réglage mémorisé).
 - **Désignation (Déplacer, Rotation, Gomme, Propriétés…)** : les annotations (textes, cotes, angles) passent avant les formes et se désignent aussi par leur texte ; une forme vide (cercle, rectangle non rempli) se désigne par son contour ou son centre, pas par l'intérieur.
 - **Clic sur l'objet du dessus** : tous les outils visent l'objet vecteur le plus haut sous le curseur, quelle que soit la couche active.
 - **Filtres respectés** : masquer une entité s'ajoute au filtre déjà posé sur la couche, et « Tout afficher » rend ce filtre intact.
@@ -97,12 +104,12 @@ Les outils sont rangés dans **3 boutons à menu** — **Tracer ▾**, **Modifie
 | <img src="icons/draw_text.svg" width="24"/> | **Texte** | point d'insertion → angle (Entrée : 0°) → texte et taille | Angle ; taille en points (fixe à l'écran) |
 | <img src="icons/draw_dimension.svg" width="24"/> | **Cote** | point 1 → point 2 → position de la cote (Entrée : sans décalage) | Longueur, angle, puis décalage |
 | <img src="icons/draw_angle.svg" width="24"/> | **Angle** | clic sur 2 lignes (ou Entrée : sommet → un point sur chaque côté) → position de l'arc : le côté choisi donne l'angle, son supplémentaire ou l'angle rentrant | Longueur, angle (mode 3 points), puis rayon |
-| <img src="icons/draw_move.svg" width="24"/> | **Déplacer** | objet → point de base → point d'arrivée | Longueur, angle |
-| <img src="icons/draw_copy.svg" width="24"/> | **Copier** | objet → point de base → un clic par copie → Entrée | Longueur, angle |
-| <img src="icons/draw_rotate.svg" width="24"/> | **Rotation** | objet → point de base (Entrée : son centre) → angle | Angle (anti-horaire) |
-| <img src="icons/draw_mirror.svg" width="24"/> | **Miroir** | objet → 2 points de l'axe (l'objet est retourné) | Angle de l'axe |
-| <img src="icons/draw_scale.svg" width="24"/> | **Échelle** | objet → point de base (Entrée : centre) → facteur | Facteur ; **R** : longueur actuelle → nouvelle |
-| <img src="icons/draw_align.svg" width="24"/> | **Aligner** | objet → 1er point source → sa destination → 2e point source (Entrée : déplacer seulement) → sa destination → mise à l'échelle ? | **O** : oui ; **N** ou Entrée : non |
+| <img src="icons/draw_move.svg" width="24"/> | **Déplacer** | objet(s) → point de base → point d'arrivée | Longueur, angle |
+| <img src="icons/draw_copy.svg" width="24"/> | **Copier** | objet(s) → point de base → un clic par copie → Entrée | Longueur, angle |
+| <img src="icons/draw_rotate.svg" width="24"/> | **Rotation** | objet(s) → point de base (Entrée : son centre) → angle | Angle (anti-horaire) |
+| <img src="icons/draw_mirror.svg" width="24"/> | **Miroir** | objet(s) → 2 points de l'axe (l'objet est retourné) | Angle de l'axe |
+| <img src="icons/draw_scale.svg" width="24"/> | **Échelle** | objet(s) → point de base (Entrée : centre) → facteur | Facteur ; **R** : longueur actuelle → nouvelle |
+| <img src="icons/draw_align.svg" width="24"/> | **Aligner** | objet(s) → 1er point source → sa destination → 2e point source (Entrée : déplacer seulement) → sa destination → mise à l'échelle ? | **O** : oui ; **N** ou Entrée : non |
 | <img src="icons/draw_eraser.svg" width="24"/> | **Gomme** | clic sur une forme, ou cliquer-glisser (lasso) pour en effacer plusieurs | — |
 | <img src="icons/draw_properties.svg" width="24"/> | **Propriétés** | clic sur une forme dessinée ; Entrée sans objet : propriétés courantes | Couleur, épaisseur, trait, remplissage, opacité, texte |
 | <img src="icons/draw_fill.svg" width="24"/> | **Remplissage** | bouton à bascule : actif = rectangles, carrés, cercles remplis ; inactif = vides | — |
@@ -116,6 +123,7 @@ Les outils sont rangés dans **3 boutons à menu** — **Tracer ▾**, **Modifie
 | Entrée | valide le point ; sans saisie, termine la commande |
 | Échap | efface la saisie, puis annule la commande |
 | U ou Retour arrière | annule le dernier point (ou le dernier segment de Ligne) |
+| cliquer-glisser | Modifier : entoure plusieurs objets (lasso) ; Entrée ou clic droit pour continuer |
 | A | Ligne / Polyligne : bascule l'angle entre relatif et absolu |
 | F3 | active / désactive l'accrochage objet |
 
@@ -142,7 +150,7 @@ Les outils sont rangés dans **3 boutons à menu** — **Tracer ▾**, **Modifie
 - **Texte** : brouillon « Box_cad dessin – textes » ; taille en points, fixe à l'écran ; angle anti-horaire, comme en DAO. Un texte se désigne en cliquant n'importe où sur ses lettres : Déplacer, Copier, Gomme et Propriétés s'y appliquent ; la Rotation l'incline, l'Échelle change sa taille, le Miroir le reporte de l'autre côté de l'axe en le gardant lisible.
 - **Propriétés** : couleur, épaisseur, type de trait (continu, tirets, pointillés, mixte), remplissage et opacité, forme par forme, sur les dessins Box_cad uniquement ; la case « Utiliser pour les prochaines formes » les rend courantes (mémorisées).
 - **Rotation** : agit sur les formes dessinées (bouton Annuler) et sur la couche active en édition (Ctrl+Z) ; l'objet tourné est prévisualisé en bleu, l'angle suit la souris ou se tape, l'ortho l'aimante.
-- **Aligner** : alignement par deux paires de points (source → destination), en 2D. Le 1er point source vient sur la 1re destination et la direction des points source prend celle des destinations ; **O** met aussi à l'échelle (rapport des deux longueurs), question sautée si elles sont égales. Entrée après la 1re paire : simple déplacement ; U revient au point précédent. Les paires déjà données restent tracées en pointillés ; pendant le choix des points source, l'objet reste montré en bleu à sa place (c'est sur lui que l'accrochage prend les points), et l'aperçu déplacé ou tourné ne suit la souris que pendant le choix des destinations ; un texte tourne et, sur O, change de taille ; les cotes posées sur la forme suivent. Un bandeau bleu en haut de la carte guide pas à pas : étapes (faites cochées, en cours soulignée), consigne de l'étape et touches utiles ; sa croix le ferme jusqu'à la prochaine activation de l'outil.
+- **Aligner** : alignement par deux paires de points (source → destination), en 2D. Le 1er point source vient sur la 1re destination et la direction des points source prend celle des destinations ; **O** met aussi à l'échelle (rapport des deux longueurs), question sautée si elles sont égales. Entrée après la 1re paire : simple déplacement ; U revient au point précédent. Les paires déjà données restent tracées en pointillés ; pendant le choix des points source, l'objet reste montré en bleu à sa place (c'est sur lui que l'accrochage prend les points), et l'aperçu déplacé ou tourné ne suit la souris que pendant le choix des destinations ; un texte tourne et, sur O, change de taille ; les cotes posées sur la forme suivent.
 - **SCR du projet** : les mesures sont toujours en mètres vrais. Projet en mètres sans déformation (Lambert 93, CC, UTM…) : rien ne change. Projet en degrés (WGS 84) ou en Web Mercator (les longueurs y sont faussées d'environ 44 % à la latitude de Vichy) : Box_cad calcule en Lambert 93 en France métropolitaine, sinon dans la zone UTM du centre de la carte (réévalué quand on déplace la vue, entre deux formes), et l'indique une fois par un message. Les nouveaux brouillons sont créés dans ce SCR métrique ; accrochage, cotes, transformations et aperçus suivent.
 - **Gomme** : n'agit que sur les couches brouillon « Box_cad dessin » visibles, jamais sur vos données ; la forme visée est surlignée en rouge (la plus petite si plusieurs se superposent) ; le bouton Annuler restaure le dernier effacement.
 
@@ -204,7 +212,7 @@ No more back-and-forth between the map and a 40-row layers panel: click what is 
 - **Layer order by click**: to top, up, down, to bottom.
 - **Existing filters kept**: hiding a feature adds to the layer's current filter; *Show all* restores it untouched.
 - **Safe delete**: if the layer is already in edit mode, the deletion stays in your edit session instead of being committed.
-- **Drawing toolbar (CAD-style)**: line, polyline, rectangle, rotated rectangle, square, circle, rotation (draft shapes or active layer in edit mode), align (two source → destination point pairs, optional scaling) and an eraser for draft shapes. Click a first point, then type length / angle / width / height / radius in the fields next to the cursor (Tab next field, Enter validate, Esc cancel, U undo last point). Snapping and ortho (F8). Shapes go to the active layer when it is in edit mode and of the right type, otherwise to an in-memory draft layer.
+- **Drawing toolbar (CAD-style)**: line, polyline, rectangle, rotated rectangle, square, circle, rotation (draft shapes or active layer in edit mode), align (two source → destination point pairs, optional scaling) and an eraser for draft shapes. Move, copy, rotate, mirror, scale and align work on one feature or on several (click-and-drag lasso, then Enter). A blue help banner shows each tool's steps, the current instruction and useful keys (*Drawing modes → Help banner* turns it off). Click a first point, then type length / angle / width / height / radius in the fields next to the cursor (Tab next field, Enter validate, Esc cancel, U undo last point). Snapping and ortho (F8). Shapes go to the active layer when it is in edit mode and of the right type, otherwise to an in-memory draft layer.
 
 ### Requirements
 
@@ -244,6 +252,7 @@ Box_cad añade a QGIS una barra de 12 herramientas que actúan directamente sobr
 - **Ordenar por geometría** (puntos, líneas, polígonos) y **orden de capas** por clic.
 - **Barra de dibujo** estilo CAD: línea, polilínea, rectángulo, cuadrado y círculo con longitudes y ángulos tecleados.
 - **Alinear** (dos pares de puntos origen → destino) y medidas en metros reales sea cual sea el SRC del proyecto.
+- **Varios objetos** a la vez con un lazo (mover, copiar, girar, simetría, escala, alinear) y **banda de ayuda** paso a paso en cada herramienta.
 
 ### Instalación
 
@@ -266,6 +275,7 @@ O Box_cad adiciona ao QGIS uma barra de 12 ferramentas que atuam diretamente sob
 - **Ordenar por geometria** (pontos, linhas, polígonos) e **ordem das camadas** por clique.
 - **Barra de desenho** estilo CAD: linha, polilinha, retângulo, quadrado e círculo com comprimentos e ângulos digitados.
 - **Alinhar** (dois pares de pontos origem → destino) e medidas em metros reais qualquer que seja o SRC do projeto.
+- **Vários objetos** de uma vez com um laço (mover, copiar, rodar, espelhar, escala, alinhar) e **faixa de ajuda** passo a passo em cada ferramenta.
 
 ### Instalação
 
@@ -288,6 +298,7 @@ Box_cad fügt QGIS eine Werkzeugleiste mit 12 Werkzeugen hinzu, die direkt auf d
 - **Nach Geometrie sortieren** (Punkte, Linien, Polygone) und **Layer-Reihenfolge** per Klick.
 - **Zeichenleiste** im CAD-Stil: Linie, Polylinie, Rechteck, Quadrat und Kreis mit eingetippten Längen und Winkeln.
 - **Ausrichten** (zwei Punktpaare Quelle → Ziel) und Maße in echten Metern in jedem Projekt-KBS.
+- **Mehrere Objekte** auf einmal per Lasso (verschieben, kopieren, drehen, spiegeln, skalieren, ausrichten) und schrittweises **Hilfeband** in jedem Werkzeug.
 
 ### Installation
 
@@ -302,7 +313,7 @@ Den Ordner `Box_cad` in das QGIS-Erweiterungsverzeichnis kopieren und unter *Erw
 | `plugin_main.py` | Barre d'outils, menu, actions et annulation |
 | `_identify_enums.py` | Base commune des outils « clic sur un objet » |
 | `map_tool_*.py` | Un outil de carte par fonction (localiser, masquer, supprimer, ordre) |
-| `draw/` | Barre Dessin : géométrie pure, saisie dynamique, outils, couche cible, SCR de travail métrique (`crs.py`) |
+| `draw/` | Barre Dessin : géométrie pure, saisie dynamique, bandeau d'aide (`guide.py`), outils, couche cible, SCR de travail métrique (`crs.py`) |
 | `about_dialog.py` | Fenêtre « À propos » |
 | `icons/` | Icônes SVG de la barre |
 
@@ -314,6 +325,7 @@ Le détail est dans [`CHANGELOG.md`](CHANGELOG.md).
 
 | Version | Notes |
 |---------|-------|
+| **1.3.0** | Plusieurs objets au lasso pour Déplacer, Copier, Rotation, Miroir, Échelle, Aligner — Bandeau d'aide sur tous les outils de dessin (à couper dans Modes de dessin) — Lasso refermé près de son départ bien reconnu (Gomme, Supprimer) — Textes repris par le lasso de la Gomme |
 | **1.2.2** | Formulation « façon DAO / CAD » — Logo et badge de la fenêtre À propos — Section Auteur sans employeur |
 | **1.2.1** | Message « mètres vrais » raccourci (tient sur une ligne) — Captures d'Aligner et des mesures en mètres vrais |
 | **1.2.0** | Aligner (deux paires de points) avec bandeau d'aide pas à pas — Mesures en mètres vrais quel que soit le SCR du projet (WGS 84, Web Mercator) — Accents des messages |

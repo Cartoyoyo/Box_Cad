@@ -6,6 +6,8 @@ from . import target as T
 from .draw_tool_base import DrawTool
 
 LEN_ANG = [("length", "Longueur", "m"), ("angle", "Angle", "°")]
+TYPE_LEN = "tapez la <b>longueur</b> (Tab : <b>angle</b>) puis Entrée"
+KEYS_SEGMENTS = "U : annuler le dernier {} · A : angle absolu / relatif · F8 : ortho · F3 : accrochage objet"
 
 
 class ChainedSegments:
@@ -50,6 +52,11 @@ class LineTool(ChainedSegments, DrawTool):
     """LIGNE : segments enchaines, une entite par segment ; Entree/Echap termine."""
     TOOL_NAME = "ligne"
     PROMPT = "Point suivant (Entrée/Échap : fin, U : annuler, A : angle abs./rel.) :"
+    GUIDE_STEPS = ("Premier point", "Points suivants")
+    GUIDE_HINTS = ("Cliquez le début de la ligne (accrochage objet sur les formes existantes).",
+                   f"Cliquez le point suivant, ou {TYPE_LEN}. Chaque segment est une entité ; "
+                   "<b>Entrée</b> : terminer.")
+    GUIDE_KEYS = KEYS_SEGMENTS.format("segment")
 
     def start(self):
         self.points = []
@@ -86,6 +93,11 @@ class PolylineTool(ChainedSegments, DrawTool):
     """POLYLIGNE : une seule entite ; Entree/clic droit termine, C ferme."""
     TOOL_NAME = "polyligne"
     PROMPT = "Point suivant (Entrée : fin, C : fermer, U : annuler, A : angle abs./rel.) :"
+    GUIDE_STEPS = ("Premier point", "Points suivants")
+    GUIDE_HINTS = ("Cliquez le début de la polyligne (accrochage objet sur les formes existantes).",
+                   f"Cliquez le point suivant, ou {TYPE_LEN}. <b>Entrée</b> ou clic droit : terminer · "
+                   "<b>C</b> : fermer.")
+    GUIDE_KEYS = KEYS_SEGMENTS.format("point")
 
     def start(self):
         self.points = []
@@ -139,6 +151,16 @@ class RectangleTool(DrawTool):
         self.oriented = oriented
         self.TOOL_NAME = "rectangle orienté" if oriented else "rectangle"
         self.side_angle = 0.0
+        if oriented:
+            self.GUIDE_STEPS = ("Premier coin", "Premier côté", "Hauteur")
+            self.GUIDE_HINTS = ("Cliquez le premier coin du rectangle.",
+                                f"Cliquez la fin du premier côté, ou {TYPE_LEN}.",
+                                "Placez la souris du côté voulu et cliquez, ou tapez la <b>hauteur</b> puis Entrée.")
+        else:
+            self.GUIDE_STEPS = ("Premier coin", "Coin opposé")
+            self.GUIDE_HINTS = ("Cliquez un coin du rectangle.",
+                                "Cliquez le coin opposé, ou tapez la <b>largeur</b> (Tab : <b>hauteur</b>) puis "
+                                "Entrée ; la souris donne le côté.")
 
     def start(self):
         self.points = []
@@ -191,6 +213,10 @@ class SquareTool(DrawTool):
     """CARRÉ : coin, puis premier côté (côté, angle) ; le carré est construit
     à gauche de ce côté (sens anti-horaire)."""
     TOOL_NAME = "carré"
+    GUIDE_STEPS = ("Premier coin", "Côté")
+    GUIDE_HINTS = ("Cliquez un coin du carré.",
+                   "Cliquez la fin du côté, ou tapez le <b>côté</b> (Tab : <b>angle</b>) puis Entrée ; "
+                   "le carré se construit à gauche du côté.")
 
     def start(self):
         self.points = []
@@ -218,6 +244,9 @@ class SquareTool(DrawTool):
 class CircleTool(DrawTool):
     """CERCLE : centre, puis rayon."""
     TOOL_NAME = "cercle"
+    GUIDE_STEPS = ("Centre", "Rayon")
+    GUIDE_HINTS = ("Cliquez le centre du cercle (accrochage objet sur les formes existantes).",
+                   "Cliquez un point du cercle, ou tapez le <b>rayon</b> puis Entrée.")
 
     def start(self):
         self.points = []
@@ -248,6 +277,11 @@ class PolygonTool(ChainedSegments, DrawTool):
     """POLYGONE : un clic par sommet ; Entree, clic droit ou C ferme (3 sommets minimum)."""
     TOOL_NAME = "polygone"
     PROMPT = "Sommet suivant (Entrée / C : fermer, U : annuler, A : angle abs./rel.) :"
+    GUIDE_STEPS = ("Premier sommet", "Sommets suivants")
+    GUIDE_HINTS = ("Cliquez le premier sommet du polygone.",
+                   f"Cliquez le sommet suivant, ou {TYPE_LEN}. <b>Entrée</b>, clic droit ou <b>C</b> : fermer "
+                   "(3 sommets minimum).")
+    GUIDE_KEYS = KEYS_SEGMENTS.format("sommet")
 
     def start(self):
         self.points = []
