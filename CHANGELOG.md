@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.2 — 2026-10-25
+
+### Modifications
+- Formulation « façon DAO » (« CAD-style » en anglais) à la place des références à une marque de logiciel : description, présentation, README et code.
+- Fenêtre À propos : logo sous-titré « Outils DAO / CAD pour QGIS » et badge « style DAO / CAD ».
+- README : section Auteur sans mention de l'employeur, contact par LinkedIn.
+
+### Publication
+- À chaque nouvelle version, les versions précédentes encore en attente de validation sont retirées de plugins.qgis.org (les versions validées sont conservées).
+
 ## 1.2.1 — 2026-10-25
 
 ### Corrections
