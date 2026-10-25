@@ -139,5 +139,6 @@ class Frame:
         return g
 
     def describe(self):
-        """« Lambert-93 (EPSG:2154) » : pour le message d'information."""
-        return f"{self.crs.description()} ({self.crs.authid()})"
+        """« Lambert-93 (EPSG:2154) » : nom court (sans le systeme geodesique), pour que
+        le message d'information tienne sur une ligne de la barre de messages."""
+        return f"{self.crs.description().split(' / ')[-1]} ({self.crs.authid()})"

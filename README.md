@@ -7,7 +7,7 @@
 **Deux barres d'outils QGIS façon AutoCAD : nettoyer l'affichage d'un clic sur la carte, et dessiner à la cote**
 
 [![QGIS](https://img.shields.io/badge/QGIS-3.16%2B-green?logo=qgis&logoColor=white)](https://qgis.org)
-[![Version](https://img.shields.io/badge/version-1.2.0-blue)](metadata.txt)
+[![Version](https://img.shields.io/badge/version-1.2.1-blue)](metadata.txt)
 [![License](https://img.shields.io/badge/license-GPL%20v3-orange)](LICENSE)
 [![Docs](https://img.shields.io/badge/docs-FR%20%7C%20EN%20%7C%20ES%20%7C%20PT%20%7C%20DE-lightgrey)](#français)
 
@@ -28,6 +28,11 @@
 |:---:|:---:|
 | ![Barre Box_cad Dessin](screenshot/barre_dessin.png) | <img src="screenshot/saisie_dynamique.png" width="420" alt="Saisie dynamique"/> |
 | Tracer ▾ — Modifier ▾ — Annoter ▾ — remplissage — accrochage (F3) — ortho (F8)<br>pastille : couleur, épaisseur et couche qui reçoit le dessin | Valeurs près du curseur ;<br>étape, champs et touches dans la barre d'état |
+
+| Aligner · Align | Mètres vrais dans tout SCR · True metres in any CRS |
+|:---:|:---:|
+| <img src="screenshot/aligner.png" width="420" alt="Aligner"/> | <img src="screenshot/scr_metres.png" width="420" alt="Mesures en mètres vrais"/> |
+| Bandeau d'aide pas à pas ; 1re paire en pointillés,<br>objet aligné en bleu, accrochage sur le coin visé | Projet en Web Mercator : 10 m tapés = 10 m vrais<br>(calcul en Lambert 93), cotes et surfaces justes |
 
 | À propos · About |
 |:---:|
@@ -309,6 +314,7 @@ Le détail est dans [`CHANGELOG.md`](CHANGELOG.md).
 
 | Version | Notes |
 |---------|-------|
+| **1.2.1** | Message « mètres vrais » raccourci (tient sur une ligne) — Captures d'Aligner et des mesures en mètres vrais |
 | **1.2.0** | Aligner façon AutoCAD avec bandeau d'aide pas à pas — Mesures en mètres vrais quel que soit le SCR du projet (WGS 84, Web Mercator) — Accents des messages |
 | **1.1.0** | Barre Box_cad Dessin en 3 menus — Déplacer, Copier, Miroir, Échelle — Polygone — Texte — Propriétés — Accrochage objet (F3) — Cote — Angle — Remplissage à la demande — Angle relatif — Rotation — Gomme — Saisie dynamique près du curseur — Accrochage, ortho — Couche active ou brouillon mémoire |
 | **1.0.0** | Première version publique — Jeu d'icônes harmonisé — Filtres de couche conservés — Suppression sans enregistrement forcé — Tri annulable — Menu Extensions et fenêtre À propos — Compatibilité Qt6 |

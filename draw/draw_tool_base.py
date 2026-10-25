@@ -153,8 +153,8 @@ class DrawTool(QgsMapTool):
             return
         self.plugin.work_notices.add(key)
         self.plugin.iface.messageBar().pushInfo(
-            "Box_cad", f"Mesures en mètres vrais : calculs en {frame.describe()}, "
-                       f"la carte étant en {frame.map_crs.authid() or 'SCR sans code'}.")
+            "Box_cad", f"Mesures en mètres vrais : calcul en {frame.describe()}, "
+                       f"carte en {frame.map_crs.authid() or 'SCR sans code'}.")
 
     def _rubber(self, geom_type):
         rb = QgsRubberBand(self.canvas(), geom_type)

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.1 — 2026-10-25
+
+### Corrections
+- Message « Mesures en mètres vrais » raccourci (« calcul en Lambert-93 (EPSG:2154), carte en EPSG:3857 ») : sur deux lignes, la barre de messages de QGIS le coupait.
+
+### Documentation
+- Captures d'Aligner (bandeau d'aide, paire en pointillés, aperçu bleu, accrochage) et des mesures en mètres vrais dans un projet en Web Mercator.
+
 ## 1.2.0 — 2026-10-25
 
 ### Ajouts
