@@ -11,6 +11,7 @@ from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QColor
 
 from . import target as T
+from .crs import pixel_size
 from .pick import TEXT_SEARCH_PX, draft_layers, hit_geometry, is_text_layer, pick_feature, to_layer
 
 DRAG_THRESHOLD = 5      # pixels avant de passer en lasso
@@ -118,7 +119,7 @@ class EraserTool(QgsMapTool):
             engine.prepareGeometry()
             box = geom.boundingBox()
             if is_text_layer(layer):
-                box.grow(TEXT_SEARCH_PX * self.canvas().mapUnitsPerPixel())
+                box.grow(TEXT_SEARCH_PX * pixel_size(self.canvas(), layer.crs()))
             request = QgsFeatureRequest().setFilterRect(box)
             feats = [QgsFeature(f) for f in layer.getFeatures(request)
                      if f.hasGeometry()
@@ -136,7 +137,7 @@ class EraserTool(QgsMapTool):
             layer, feature = hit
             geom = hit_geometry(self.canvas(), layer, feature)
             if geom.type() != T.POLYGON:
-                geom = geom.buffer(self.canvas().mapUnitsPerPixel() * 2, 4)
+                geom = geom.buffer(pixel_size(self.canvas(), layer.crs()) * 2, 4)
             self.rb_hover.setToGeometry(geom, layer)
 
     # ------------------------------------------------------------------

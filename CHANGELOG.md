@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.0 — 2026-10-25
+
+### Ajouts
+- **Aligner** façon AutoCAD (menu Modifier) : objet, 1er point source puis sa destination, 2e point source puis sa destination ; l'objet est déplacé et tourné pour que les points source tombent sur les destinations. « Mettre à l'échelle ? » : O = oui, N ou Entrée = non (question sautée si les deux longueurs sont égales). Entrée après la 1re paire : simple déplacement ; U revient au point précédent. Les points source se prennent sur l'objet à sa place (montré en bleu, accrochage objet), l'aperçu aligné n'apparaît que pendant le choix des destinations. Formes dessinées (Annuler) et couche active en édition (Ctrl+Z) ; les cotes et angles posés sur la forme suivent ; un texte tourne et, sur O, change de taille.
+- **Box_cad s'adapte au SCR du projet** : mesures toujours en mètres vrais. Projet en mètres sans déformation (Lambert 93, CC, UTM…) : rien ne change. Projet en degrés (WGS 84) ou en Web Mercator (longueurs faussées de 44 % à la latitude de Vichy) : calculs en Lambert 93 en France métropolitaine, sinon dans la zone UTM du centre de la carte, signalés une fois par un message bleu ; ce SCR se choisit au centre de la vue et suit la vue entre deux formes (jamais au milieu d'une forme). Nouveaux brouillons créés dans ce SCR métrique ; longueurs et surfaces des brouillons en mètres vrais ; accrochage, désignation, cotes, transformations et aperçus suivent ; changer le SCR pendant un outil le relance proprement. Remplace l'avertissement « carte en coordonnées géographiques ».
+- Bandeau d'aide bleu en haut de la carte pendant Aligner : les 6 étapes (faites cochées, en cours soulignée), la consigne de l'étape et les touches (U, Échap, F3) ; hauteur fixe de 3 lignes, fermé par sa croix jusqu'à la prochaine activation.
+
+### Corrections
+- Accents rétablis dans deux messages (carte en coordonnées géographiques, couche créée en mémoire).
+
 ## 1.1.0 — 2026-10-16
 
 ### Ajouts

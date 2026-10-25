@@ -115,7 +115,7 @@ class PropertiesTool(TransformTool):
 
     def compute(self, mouse):
         if self.step == STEP_PICK:
-            self.hover = pick_feature(self.canvas(), draft_layers(), mouse)   # dessins seulement
+            self.hover = pick_feature(self.canvas(), draft_layers(), self.frame.to_map(mouse))   # dessins
         return mouse, None, None, {}, ""
 
     def wants_osnap(self):

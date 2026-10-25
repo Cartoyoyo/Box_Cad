@@ -6,6 +6,7 @@ from qgis.core import (
 
 from . import geometry as G
 from . import target as T
+from .crs import pixel_size
 
 PICK_TOLERANCE = 6      # pixels autour du curseur
 TEXT_SEARCH_PX = 600    # un texte peut etre designe loin de son point d'insertion
@@ -30,9 +31,9 @@ def _number(value, default):
         return default
 
 
-def text_box(canvas, feature, geom=None, angle=None, size=None):
-    """Cadre approximatif d'un texte (SCR de la couche) : depuis le point d'insertion,
-    vers la droite et le haut, incline de son angle. Taille en points -> unites carte."""
+def text_box(canvas, feature, geom=None, angle=None, size=None, crs=None):
+    """Cadre approximatif d'un texte (SCR de la couche, `crs`) : depuis le point d'insertion,
+    vers la droite et le haut, incline de son angle. Taille en points -> unites du SCR."""
     geom = geom if geom is not None else feature.geometry()
     if geom is None or geom.isNull():
         return QgsGeometry()
@@ -41,7 +42,7 @@ def text_box(canvas, feature, geom=None, angle=None, size=None):
     lines = text.split("\n") or [""]
     size = size if size is not None else _number(feature["taille"], 10.0)
     angle = angle if angle is not None else _number(feature["angle"], 0.0)
-    em = canvas.mapUnitsPerPixel() * canvas.mapSettings().outputDpi() / 72.0 * size
+    em = _em(canvas, size, crs)
     width = max(max(len(line) for line in lines), 1) * 0.56 * em
     height = len(lines) * 1.2 * em
     return G.polygon_geometry(G.rect_oriented(geom.asPoint(), angle, width, height))
@@ -50,13 +51,13 @@ def text_box(canvas, feature, geom=None, angle=None, size=None):
 def hit_geometry(canvas, layer, feature, geom=None, angle=None, size=None):
     """Geometrie qui represente l'objet a l'ecran : cadre pour un texte, sinon la geometrie."""
     if is_text_layer(layer):
-        return text_box(canvas, feature, geom, angle, size)
+        return text_box(canvas, feature, geom, angle, size, layer.crs())
     return geom if geom is not None else feature.geometry()
 
 
-def _em(canvas, size=LABEL_SIZE):
-    """Hauteur d'un caractere de `size` points, en unites carte."""
-    return canvas.mapUnitsPerPixel() * canvas.mapSettings().outputDpi() / 72.0 * size
+def _em(canvas, size=LABEL_SIZE, crs=None):
+    """Hauteur d'un caractere de `size` points, en unites de `crs` (de la carte par defaut)."""
+    return pixel_size(canvas, crs) * canvas.mapSettings().outputDpi() / 72.0 * size
 
 
 def label_box(canvas, layer, feature, geom=None):
@@ -70,12 +71,12 @@ def label_box(canvas, layer, feature, geom=None):
     if not parts or len(parts[0]) < 2:
         return QgsGeometry()
     line = parts[0]
-    em = _em(canvas)
+    em = _em(canvas, crs=layer.crs())
     if kind == "dimension":
         a, b = line[0], line[-1]
         chars = len(f"{_number(feature['longueur'], 0):.2f} m")
         width = chars * 0.56 * em
-        half = LABEL_DIST_MM * canvas.mapSettings().outputDpi() / 25.4 * canvas.mapUnitsPerPixel() + 1.2 * em
+        half = LABEL_DIST_MM * canvas.mapSettings().outputDpi() / 25.4 * pixel_size(canvas, layer.crs()) + 1.2 * em
         ang = G.angle_of(a, b)
         mid = QgsPointXY((a.x() + b.x()) / 2, (a.y() + b.y()) / 2)
         corner = G.polar_point(G.polar_point(mid, width / 2, ang + 180), half, ang - 90)
@@ -135,16 +136,19 @@ def pick_feature(canvas, layers, map_point):
     le plus petit (pour viser une forme dessinee a l'interieur d'une autre).
     Les annotations (texte, cote, angle, etiquette comprise) passent avant les formes
     dans la tolerance : une cote posee dans un cercle reste designable.
+    `map_point` est dans le SCR de la carte ; distances comparees en pixels (les
+    couches peuvent etre dans des SCR differents).
     Retourne (couche, QgsFeature) ou None."""
-    tol = PICK_TOLERANCE * canvas.mapUnitsPerPixel()
     best = None
     for layer in layers:
+        upp = pixel_size(canvas, layer.crs())       # un pixel, en unites de la couche
+        tol = PICK_TOLERANCE * upp
         pt = to_layer(QgsGeometry.fromPointXY(QgsPointXY(map_point)), canvas, layer)
         p = pt.asPoint()
         if is_text_layer(layer):
-            reach = TEXT_SEARCH_PX * canvas.mapUnitsPerPixel()
+            reach = TEXT_SEARCH_PX * upp
         elif is_annotation_layer(layer):
-            reach = tol + 3 * _em(canvas)        # etiquette a cote de la ligne de cote / de l'arc
+            reach = tol + 3 * _em(canvas, crs=layer.crs())   # etiquette a cote de la ligne de cote / de l'arc
         else:
             reach = tol
         rect = QgsRectangle(p.x() - reach, p.y() - reach, p.x() + reach, p.y() + reach)
@@ -161,7 +165,7 @@ def pick_feature(canvas, layers, map_point):
                 d = 0.0
             if d > tol:
                 continue
-            key = (0 if is_annotation_layer(layer) else 1, d, g.area())
+            key = (0 if is_annotation_layer(layer) else 1, d / upp, g.area() / (upp * upp))
             if best is None or key < best[0]:
                 best = (key, layer, QgsFeature(f))
     return (best[1], best[2]) if best else None

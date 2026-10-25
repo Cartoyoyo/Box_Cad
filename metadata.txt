@@ -8,14 +8,21 @@ about=FR: Barre d'outils de nettoyage rapide de l'affichage, inspiree d'AutoCAD 
     masquer une couche ou une entite par clic, supprimer des entites par clic ou au lasso (avec confirmation),
     tout afficher / tout eteindre, trier les couches par type de geometrie et changer l'ordre d'une couche par clic.
     Barre Dessin : ligne, polyligne, rectangle (orientable), carre et cercle avec longueurs et angles tapes
-    pres du curseur, accrochage et ortho.
+    pres du curseur, accrochage et ortho ; deplacer, copier, rotation, miroir, echelle et aligner facon AutoCAD ;
+    mesures en metres vrais quel que soit le SCR du projet.
     Chaque action est annulable. Auteur : Yoan Laloux - https://www.linkedin.com/in/ylaloux/
     EN: Quick display cleanup toolbar, AutoCAD Map style: locate a feature's layer by click, hide a layer or a feature by click,
     delete features by click or lasso (with confirmation), show all / hide all, sort layers by geometry type
     and reorder a layer by click. Drawing toolbar: line, polyline, rectangle (rotatable), square and circle with
-    typed lengths and angles next to the cursor, snapping and ortho. Every action can be undone. Author: Yoan Laloux - https://www.linkedin.com/in/ylaloux/
-version=1.1.0
-changelog=1.1.0
+    typed lengths and angles next to the cursor, snapping and ortho; AutoCAD-style move, copy, rotate, mirror, scale and align;
+    true metres in any project CRS. Every action can be undone. Author: Yoan Laloux - https://www.linkedin.com/in/ylaloux/
+version=1.2.0
+changelog=1.2.0
+    - Aligner facon AutoCAD : 2 paires de points source / destination, mise a l'echelle O/N, bandeau d'aide pas a pas / AutoCAD-style Align with step-by-step help banner
+    - Mesures en metres vrais quel que soit le SCR du projet : WGS 84 ou Web Mercator calcules en Lambert 93 ou UTM / true metres in any project CRS
+    - Points source d'Aligner pris sur l'objet a sa place, avec accrochage / Align source points picked on the object itself, with snapping
+    - Accents des messages / message accents
+    1.1.0
     - Barre Box_cad Dessin en 3 menus : ligne, polyligne, rectangles, carre, polygone, cercle, texte, cote, deplacer, copier, rotation, miroir, echelle, gomme, proprietes, remplissage, accrochage F3 / drawing toolbar
     - Saisie dynamique pres du curseur, accrochage, ortho F8 / dynamic input, snapping, ortho
     - Dessin dans la couche active en edition, sinon couche brouillon memoire / active layer or memory draft layer

@@ -1,12 +1,13 @@
 """Base commune des outils de dessin : accrochage, ortho, apercu,
 saisie dynamique au clavier et enregistrement dans la couche cible."""
-from qgis.core import QgsApplication, QgsPointLocator, QgsProject
+from qgis.core import QgsApplication, QgsCsException, QgsPointLocator, QgsProject
 from qgis.gui import QgsMapTool, QgsRubberBand, QgsSnapIndicator, QgsVertexMarker
 from qgis.PyQt.QtCore import QEvent, Qt
 from qgis.PyQt.QtGui import QColor
 
 from . import geometry as G
 from . import target as T
+from .crs import Frame, work_crs
 from .dynamic_input import DynamicInput
 from .osnap import LABELS as OSNAP_LABELS, ObjectSnapper
 
@@ -43,7 +44,7 @@ class DrawTool(QgsMapTool):
         super().__init__(canvas)
         self.plugin = plugin
         self.action = action
-        self.points = []        # points valides, SCR du canevas
+        self.points = []        # points valides, SCR de travail (self.frame.crs)
         self.mouse = None       # position souris (accrochee si accrochage)
         self.current = None     # point contraint (ortho, valeurs tapees)
         self.snapped = False
@@ -56,6 +57,8 @@ class DrawTool(QgsMapTool):
         self._commits = []      # [(layer_id, fid ou None si couche active)]
         # angle tape relatif au segment precedent (deviation), sauf si bascule par A
         self.angle_absolute = False
+        # SCR de travail : metres vrais meme si la carte est en degres ou en Web Mercator
+        self.frame = None
         self.setCursor(QgsApplication.getThemeCursor(QgsApplication.Cursor.CapturePoint))
 
     # ------------------------------------------------------------------
@@ -65,6 +68,7 @@ class DrawTool(QgsMapTool):
     def activate(self):
         super().activate()
         canvas = self.canvas()
+        self.frame = Frame(canvas)
         self.dyn = DynamicInput(canvas, self.plugin.show_draw_status)
         self.snap_indicator = QgsSnapIndicator(canvas)
         self.rb_line = self._rubber(T.LINE)
@@ -80,14 +84,20 @@ class DrawTool(QgsMapTool):
         self.osnap_marker.setIconSize(14)
         self.osnap_marker.hide()
         canvas.installEventFilter(self)
-        if canvas.mapSettings().destinationCrs().isGeographic():
-            self.plugin.warn("La carte est en coordonnees geographiques : les longueurs seraient en degres. "
-                             "Passez le projet en projection metrique (Lambert 93 par exemple).")
+        canvas.destinationCrsChanged.connect(self._on_crs_changed)
+        canvas.extentsChanged.connect(self._on_extent_changed)
         self.start()
+        self._notice_work_crs()        # apres start() : le bandeau d'Aligner ne le cache pas
 
     def deactivate(self):
         canvas = self.canvas()
         canvas.removeEventFilter(self)
+        for signal, slot in ((canvas.destinationCrsChanged, self._on_crs_changed),
+                             (canvas.extentsChanged, self._on_extent_changed)):
+            try:
+                signal.disconnect(slot)
+            except TypeError:
+                pass
         for rb in (self.rb_line, self.rb_poly, self.guide, self.osnap_marker):
             if rb is not None:
                 canvas.scene().removeItem(rb)
@@ -105,6 +115,47 @@ class DrawTool(QgsMapTool):
         super().deactivate()
         self.plugin._on_tool_deactivated(self.action)
 
+    def _on_crs_changed(self):
+        """SCR de la carte change pendant l'outil : nouveau SCR de travail, on recommence."""
+        self.frame = Frame(self.canvas())
+        self.mouse = self.current = None
+        self.start()
+        self._notice_work_crs()
+
+    def _idle(self):
+        """Aucune forme ni transformation en cours."""
+        return not self.points and getattr(self, "target", None) is None and getattr(self, "step", 0) == 0
+
+    def _on_extent_changed(self):
+        """Vue deplacee ou zoomee : le SCR de travail se choisit au centre de la vue (Web
+        Mercator vu du monde entier puis zoome sur la France, par exemple). Jamais au
+        milieu d'une forme : il ne change qu'entre deux formes."""
+        if self.frame is None or not self._idle():
+            return
+        crs = work_crs(self.canvas())
+        if crs != self.frame.crs:
+            self.frame = Frame(self.canvas(), crs)
+            self.mouse = self.current = None       # position lue dans l'ancien SCR
+            self._notice_work_crs()
+
+    def _notice_work_crs(self):
+        """Signale (une fois par session et par couple de SCR) que les mesures se font dans
+        un autre SCR que celui de la carte ; avertit si aucun SCR metrique n'a ete trouve."""
+        frame = self.frame
+        if frame.crs.isGeographic():
+            self.plugin.warn("La carte est en coordonnées géographiques et aucun SCR métrique n'a été "
+                             "trouvé : les longueurs seraient en degrés.")
+            return
+        if frame.same:
+            return
+        key = (frame.map_crs.authid(), frame.crs.authid())
+        if key in self.plugin.work_notices:
+            return
+        self.plugin.work_notices.add(key)
+        self.plugin.iface.messageBar().pushInfo(
+            "Box_cad", f"Mesures en mètres vrais : calculs en {frame.describe()}, "
+                       f"la carte étant en {frame.map_crs.authid() or 'SCR sans code'}.")
+
     def _rubber(self, geom_type):
         rb = QgsRubberBand(self.canvas(), geom_type)
         rb.setStrokeColor(ACCENT)
@@ -121,16 +172,19 @@ class DrawTool(QgsMapTool):
         return True
 
     def _read_mouse(self, event):
-        # 1) accrochage objet Box_cad (centre, quadrant, oppose...), 2) accrochage QGIS
+        # 1) accrochage objet Box_cad (centre, quadrant, oppose...), 2) accrochage QGIS ;
+        # le point retenu est exprime dans le SCR de travail
         self.snap_mode = None
+        frame = self.frame
         if self.osnap is not None and self.plugin.osnap_on and self.wants_osnap():
-            hit = self.osnap.find(event.mapPoint(), self.points[-1] if self.points else None)
+            hit = self.osnap.find(frame.from_map(event.mapPoint()), self.points[-1] if self.points else None,
+                                  crs=frame.crs)
             if hit is not None:
                 self.mouse, self.snap_mode = hit
                 self.snapped = True
                 self.snap_indicator.setMatch(QgsPointLocator.Match())
                 self.osnap_marker.setIconType(_icon(OSNAP_ICONS[self.snap_mode]))
-                self.osnap_marker.setCenter(self.mouse)
+                self.osnap_marker.setCenter(frame.to_map(self.mouse))
                 self.osnap_marker.show()
                 return
         if self.osnap_marker is not None:
@@ -138,12 +192,15 @@ class DrawTool(QgsMapTool):
         match = self.canvas().snappingUtils().snapToMap(event.pos())
         self.snap_indicator.setMatch(match)
         self.snapped = match.isValid()
-        self.mouse = match.point() if self.snapped else event.mapPoint()
+        self.mouse = frame.from_map(match.point() if self.snapped else event.mapPoint())
 
     def canvasMoveEvent(self, event):
         if self.dyn is None:
             return
-        self._read_mouse(event)
+        try:
+            self._read_mouse(event)
+        except QgsCsException:
+            return              # curseur hors du domaine du SCR de travail
         self.refresh()
         self.dyn.follow(event.pos())
 
@@ -156,7 +213,10 @@ class DrawTool(QgsMapTool):
             return
         if event.button() != Qt.MouseButton.LeftButton:
             return
-        self._read_mouse(event)
+        try:
+            self._read_mouse(event)
+        except QgsCsException:
+            return
         self.refresh()
         if self.current is not None:
             self.on_click(self.current)
@@ -241,9 +301,9 @@ class DrawTool(QgsMapTool):
         self.rb_poly.setFillColor(QColor(234, 88, 12, 60) if self.plugin.draw_fill else QColor(0, 0, 0, 0))
         if preview and len(preview) >= 2:
             if kind == "polygon" and len(preview) >= 3:
-                self.rb_poly.setToGeometry(G.polygon_geometry(preview), None)
+                self.rb_poly.setToGeometry(self.frame.geom_to_map(G.polygon_geometry(preview)), None)
             else:
-                self.rb_line.setToGeometry(G.line_geometry(preview), None)
+                self.rb_line.setToGeometry(self.frame.geom_to_map(G.line_geometry(preview)), None)
         self.dyn.set_live(live or {})
         if self.snap_mode:
             label = OSNAP_LABELS[self.snap_mode]
@@ -293,8 +353,9 @@ class DrawTool(QgsMapTool):
         if locked_len is not None:
             dist = abs(locked_len)
         if guide:
-            far = max(self.canvas().extent().width(), self.canvas().extent().height())
-            self.guide.setToGeometry(G.line_geometry([base, G.polar_point(base, far, ang)]), None)
+            far = self.frame.pixel() * max(self.canvas().width(), self.canvas().height())
+            self.guide.setToGeometry(self.frame.geom_to_map(G.line_geometry([base, G.polar_point(base, far, ang)])),
+                                     None)
         return G.polar_point(base, dist, ang), ang, dist
 
     def configure(self, prompt, fields=()):
@@ -305,29 +366,32 @@ class DrawTool(QgsMapTool):
     # ------------------------------------------------------------------
 
     def commit(self, geom, kind, extra=None):
-        """Ajoute la geometrie (SCR du canevas) a la couche active compatible,
+        """Ajoute la geometrie (SCR de travail) a la couche active compatible,
         sinon a la couche brouillon. Retourne True si l'entite est creee.
         `extra` : attributs du brouillon (ex. longueur mesuree d'une cote)."""
         iface = self.plugin.iface
-        canvas_crs = self.canvas().mapSettings().destinationCrs()
+        work_crs = self.frame.crs
         layer = T.active_target(iface, kind)
         if layer is not None:
-            if not T.add_to_active(iface, layer, T.fit_geometry(geom, layer, canvas_crs)):
+            if not T.add_to_active(iface, layer, T.fit_geometry(geom, layer, work_crs)):
                 return False
             self._commits.append((layer.id(), None))
             return True
-        layer, created = T.draft_layer(kind)
+        layer, created = T.draft_layer(kind, work_crs)
         if created:
             iface.messageBar().pushInfo(
-                "Box_cad", f"Couche « {layer.name()} » creee en memoire : exportez-la pour la conserver "
-                           "(sinon elle disparait a la fermeture de QGIS).")
+                "Box_cad", f"Couche « {layer.name()} » créée en mémoire : exportez-la pour la conserver "
+                           "(sinon elle disparaît à la fermeture de QGIS).")
         extra = dict(extra or {})
+        # mesures dans le SCR de travail (metres vrais), pas dans celui du brouillon
+        extra.setdefault("longueur", round(geom.length(), 2))
+        extra.setdefault("surface", round(geom.area(), 2))
         for name, value in (getattr(self.plugin, "current_props", None) or {}).items():
             if value is not None:
                 extra.setdefault(name, value)     # proprietes courantes (champs absents ignores)
         if kind == "polygon":
             extra.setdefault("rempli", 1 if self.plugin.draw_fill else 0)
-        fid = T.add_to_draft(layer, T.fit_geometry(geom, layer, canvas_crs), self.TOOL_NAME, extra)
+        fid = T.add_to_draft(layer, T.fit_geometry(geom, layer, work_crs), self.TOOL_NAME, extra)
         if fid is None:
             self.plugin.warn(f"Ajout impossible dans « {layer.name()} ».")
             return False

@@ -70,9 +70,10 @@ def active_target(iface, kind):
     return None
 
 
-def draft_layer(kind):
-    """Couche memoire brouillon du type demande, creee au premier besoin.
-    Retourne (couche, creee?)."""
+def draft_layer(kind, crs=None):
+    """Couche memoire brouillon du type demande, creee au premier besoin dans `crs`
+    (SCR de travail des outils, metrique), a defaut dans celui du projet. Un brouillon
+    existant est repris quel que soit son SCR. Retourne (couche, creee?)."""
     project = QgsProject.instance()
     for layer in project.mapLayers().values():
         if layer.customProperty(DRAFT_PROPERTY) == kind:
@@ -81,8 +82,12 @@ def draft_layer(kind):
                 apply_style(layer, kind)
             return layer, False
 
-    crs = project.crs().authid() or "EPSG:2154"
-    layer = QgsVectorLayer(DRAFT_GEOMETRY[kind] + "?crs=" + crs, DRAFT_NAMES[kind], "memory")
+    if crs is None or not crs.isValid():
+        crs = project.crs()
+    authid = crs.authid() if crs.isValid() else "EPSG:2154"
+    layer = QgsVectorLayer(DRAFT_GEOMETRY[kind] + ("?crs=" + authid if authid else ""), DRAFT_NAMES[kind], "memory")
+    if not authid:
+        layer.setCrs(crs)              # SCR personnalise, sans code
     _ensure_fields(layer, kind)
     layer.setCustomProperty(DRAFT_PROPERTY, kind)
     apply_style(layer, kind)

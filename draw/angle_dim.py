@@ -12,6 +12,7 @@ from qgis.core import (
 
 from . import geometry as G
 from . import target as T
+from .crs import pixel_size
 from .draw_tool_base import DrawTool
 from .pick import PICK_TOLERANCE
 
@@ -132,12 +133,12 @@ def refs_from_points(vertex, p1, p2):
     return [(G.angle_of(vertex, p1), [p1]), (G.angle_of(vertex, p2), [p2])]
 
 
-def pick_segment(canvas, map_point):
+def pick_segment(canvas, map_point, crs=None):
     """Segment de ligne (ou de contour de polygone) visible le plus proche du curseur,
-    dans le SCR du canevas : (a, b) ou None."""
-    tol = PICK_TOLERANCE * canvas.mapUnitsPerPixel()
+    dans `crs` (SCR de travail ; celui de la carte par defaut) : (a, b) ou None."""
+    dest = crs if crs is not None else canvas.mapSettings().destinationCrs()
+    tol = PICK_TOLERANCE * pixel_size(canvas, dest)
     rect = QgsRectangle(map_point.x() - tol, map_point.y() - tol, map_point.x() + tol, map_point.y() + tol)
-    dest = canvas.mapSettings().destinationCrs()
     project = QgsProject.instance()
     best = None
     for layer in canvas.layers():
@@ -201,7 +202,7 @@ class AngleTool(DrawTool):
         self.hover_segment = None
         self.preview = None
         if self.step in (STEP_LINE1, STEP_LINE2):
-            self.hover_segment = pick_segment(self.canvas(), mouse)
+            self.hover_segment = pick_segment(self.canvas(), mouse, self.frame.crs)
             return mouse, None, None, {}, ""
         if self.step == STEP_VERTEX:
             return mouse, None, None, {}, ""
@@ -223,13 +224,13 @@ class AngleTool(DrawTool):
         if self.hover_segment is not None:
             parts.append(list(self.hover_segment))
         if parts:
-            self.rb_extra.setToGeometry(QgsGeometry.fromMultiPolylineXY(parts), None)
+            self.rb_extra.setToGeometry(self.frame.geom_to_map(QgsGeometry.fromMultiPolylineXY(parts)), None)
         if self.preview is not None:
-            self.rb_extra.addGeometry(self.preview, None)
+            self.rb_extra.addGeometry(self.frame.geom_to_map(self.preview), None)
 
     def on_click(self, pt):
         if self.step in (STEP_LINE1, STEP_LINE2):
-            seg = pick_segment(self.canvas(), pt)
+            seg = pick_segment(self.canvas(), pt, self.frame.crs)
             if seg is None:
                 return                               # rien sous le curseur : on attend une ligne
             self.segments.append(seg)

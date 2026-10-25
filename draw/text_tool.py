@@ -66,7 +66,7 @@ class TextTool(DrawTool):
         p = self.points[0]
         _, ang, _ = self.constrain_from(p, mouse, length_key="", angle_key="angle")
         self.text_angle = ang
-        tip = G.polar_point(p, self.canvas().mapUnitsPerPixel() * 60, ang)
+        tip = G.polar_point(p, self.frame.pixel() * 60, ang)
         return mouse, [p, tip], "line", {"angle": ang}, ""
 
     def on_click(self, pt):

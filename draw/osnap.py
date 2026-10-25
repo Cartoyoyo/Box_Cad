@@ -13,6 +13,7 @@ from qgis.core import (
 )
 
 from . import geometry as G
+from .crs import pixel_size
 
 MODES = [
     ("endpoint", "Extrémité"), ("midpoint", "Milieu"), ("center", "Centre"),
@@ -34,7 +35,7 @@ PRIORITY = ["intersection", "endpoint", "center", "quadrant", "opposite", "midpo
 
 
 class Shapes:
-    """Elements geometriques utiles a l'accrochage, dans le SCR du canevas."""
+    """Elements geometriques utiles a l'accrochage, dans le SCR de travail des outils."""
 
     def __init__(self):
         self.vertices = []      # extremites
@@ -142,18 +143,19 @@ class SnapCache:
             locator.waitForIndexingFinished()   # ne jamais detruire pendant l'indexation
         del locator
 
-    def add_to(self, shapes, layer, rect, canvas_crs):
+    def add_to(self, shapes, layer, rect, crs):
+        """Objets de `layer` dans `rect`, exprimes dans `crs` (SCR de travail)."""
         if layer.providerType() == "memory":
-            for geom in _read(layer, rect, canvas_crs, MAX_FEATURES_PER_LAYER):
+            for geom in _read(layer, rect, crs, MAX_FEATURES_PER_LAYER):
                 shapes.add_geometry(geom, rect)
             return
         entry = self.locators.get(layer.id())
-        if entry is not None and entry[1] != canvas_crs.authid():
-            self._delete(layer.id())            # SCR de la carte change : nouvel index
+        if entry is not None and entry[1] != crs.authid():
+            self._delete(layer.id())            # SCR de travail change : nouvel index
             entry = None
         if entry is None:
-            locator = QgsPointLocator(layer, canvas_crs, QgsProject.instance().transformContext())
-            self.locators[layer.id()] = (locator, canvas_crs.authid())
+            locator = QgsPointLocator(layer, crs, QgsProject.instance().transformContext())
+            self.locators[layer.id()] = (locator, crs.authid())
             locator.init(-1, True)              # asynchrone : rend la main tout de suite
             return
         locator = entry[0]
@@ -169,18 +171,18 @@ class SnapCache:
             shapes.segments.append((QgsPointXY(a), QgsPointXY(b)))
 
 
-def _read(layer, rect, canvas_crs, limit):
-    """Lecture directe des geometries de `layer` dans `rect` (SCR du canevas)."""
-    same = canvas_crs == layer.crs()
+def _read(layer, rect, crs, limit):
+    """Lecture directe des geometries de `layer` dans `rect`, rendues dans `crs`."""
+    same = crs == layer.crs()
     project = QgsProject.instance()
     if same:
         layer_rect = rect
     else:
         try:
-            layer_rect = QgsCoordinateTransform(canvas_crs, layer.crs(), project).transformBoundingBox(rect)
+            layer_rect = QgsCoordinateTransform(crs, layer.crs(), project).transformBoundingBox(rect)
         except QgsCsException:          # emprise hors du domaine de validite du SCR
             return []
-        to_canvas = QgsCoordinateTransform(layer.crs(), canvas_crs, project)
+        to_canvas = QgsCoordinateTransform(layer.crs(), crs, project)
     request = QgsFeatureRequest().setFilterRect(layer_rect).setNoAttributes().setLimit(limit)
     geoms = []
     for feature in layer.getFeatures(request):
@@ -203,9 +205,8 @@ class ObjectSnapper:
     # Collecte des objets proches du curseur
     # ------------------------------------------------------------------
 
-    def collect(self, point, tol):
+    def collect(self, point, tol, crs):
         rect = QgsRectangle(point.x() - tol, point.y() - tol, point.x() + tol, point.y() + tol)
-        canvas_crs = self.canvas.mapSettings().destinationCrs()
         scale = self.canvas.scale()
         shapes = Shapes()
         for layer in self.canvas.layers():
@@ -213,20 +214,22 @@ class ObjectSnapper:
                 continue
             if layer.hasScaleBasedVisibility() and not layer.isInScaleRange(scale):
                 continue
-            self.cache.add_to(shapes, layer, rect, canvas_crs)
+            self.cache.add_to(shapes, layer, rect, crs)
         return shapes
 
     # ------------------------------------------------------------------
     # Recherche du point d'accrochage
     # ------------------------------------------------------------------
 
-    def find(self, point, last_point=None, modes=None):
-        """Retourne (point, mode) ou None."""
+    def find(self, point, last_point=None, modes=None, crs=None):
+        """`point` et `last_point` dans `crs` (SCR de travail ; celui de la carte par
+        defaut). Retourne (point, mode) ou None, dans ce meme SCR."""
         modes = set(modes if modes is not None else self.plugin.osnap_modes)
         if not modes:
             return None
-        tol = TOLERANCE_PX * self.canvas.mapUnitsPerPixel()
-        shapes = self.collect(point, tol)
+        crs = crs if crs is not None else self.canvas.mapSettings().destinationCrs()
+        tol = TOLERANCE_PX * pixel_size(self.canvas, crs)
+        shapes = self.collect(point, tol, crs)
         return pick(shapes, point, last_point, modes, tol)
 
 

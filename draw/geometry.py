@@ -202,6 +202,26 @@ def rotate_transform(base, angle_deg):
                       base.y() - s * base.x() - c * base.y())
 
 
+def align_transform(s1, d1, s2=None, d2=None, scale=False):
+    """ALIGNER : s1 vient sur d1 ; avec la 2e paire, la direction s1 -> s2 prend celle de
+    d1 -> d2 (rotation autour de s1) et, si `scale`, la longueur s1 s2 devient d1 d2.
+    Retourne (QTransform, rotation en degres anti-horaire, facteur), ou None si s1 = s2
+    ou d1 = d2 (direction indefinie)."""
+    from qgis.PyQt.QtGui import QTransform
+    if s2 is None or d2 is None:
+        return translate_transform(d1.x() - s1.x(), d1.y() - s1.y()), 0.0, 1.0
+    src, dst = distance(s1, s2), distance(d1, d2)
+    if src == 0 or dst == 0:
+        return None
+    angle = (angle_of(d1, d2) - angle_of(s1, s2)) % 360.0
+    factor = dst / src if scale else 1.0
+    a = math.radians(angle)
+    c, s = factor * math.cos(a), factor * math.sin(a)
+    return QTransform(c, s, -s, c,
+                      d1.x() - c * s1.x() + s * s1.y(),
+                      d1.y() - s * s1.x() - c * s1.y()), angle, factor
+
+
 def map_point(qtransform, p):
     x, y = qtransform.map(p.x(), p.y())
     return QgsPointXY(x, y)

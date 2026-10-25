@@ -85,6 +85,7 @@ class LayerPicker:
         self.current_props = load_current_props()   # couleur, epaisseur, trait, opacite
         self.osnap_on = True            # accrochage objet Box_cad, actif par defaut
         self.osnap_cache = None
+        self.work_notices = set()       # (SCR de la carte, SCR de travail) deja signales
         self.action_osnap = None
         from .draw.osnap import MODES as OSNAP_MODES
         saved = QSettings().value(OSNAP_MODES_KEY, None)
@@ -281,7 +282,7 @@ class LayerPicker:
         from .draw.tools import (
             CircleTool, LineTool, PolygonTool, PolylineTool, RectangleTool, SquareTool,
         )
-        from .draw.transform import CopyTool, MirrorTool, MoveTool, RotateTool, ScaleTool
+        from .draw.transform import AlignTool, CopyTool, MirrorTool, MoveTool, RotateTool, ScaleTool
 
         self.draw_toolbar = self.iface.mainWindow().addToolBar("Box_cad Dessin")
         self.draw_toolbar.setObjectName("BoxCadDrawToolBar")
@@ -316,6 +317,9 @@ class LayerPicker:
                  + pick, MirrorTool),
                 ("draw_scale.svg", "Échelle", "ÉCHELLE : objet, point de base (Entrée : centre), facteur tapé ou "
                  "à la souris ; R = référence (longueur actuelle → nouvelle)." + pick, ScaleTool),
+                ("draw_align.svg", "Aligner", "ALIGNER : objet, premier point source puis sa destination, "
+                 "deuxième point source (Entrée : déplacer seulement) puis sa destination ; O = mise à "
+                 "l'échelle sur les points." + pick, AlignTool),
                 ("draw_eraser.svg", "Gomme", "GOMME : clic sur une forme dessinée, ou cliquer-glisser pour en "
                  "effacer plusieurs. Couches brouillon seulement ; Annuler restaure.", EraserTool),
                 ("draw_properties.svg", "Propriétés", "PROPRIÉTÉS : clic sur une forme dessinée (couleur, épaisseur, "

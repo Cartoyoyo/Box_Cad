@@ -1,26 +1,33 @@
-"""Transformations facon AutoCAD sur UN objet : Deplacer, Copier, Rotation, Miroir, Echelle.
+"""Transformations facon AutoCAD sur UN objet : Deplacer, Copier, Rotation, Miroir, Echelle,
+Aligner.
 
 Etapes communes : designer l'objet (surbrillance au survol) -> point(s) -> valeur.
 Objets concernes : dessins Box_cad (brouillons visibles) et couche active en edition.
   - brouillon : changement direct + bouton Annuler de Box_cad ;
   - couche active : commande d'edition QGIS (Ctrl+Z), rien n'est enregistre sur disque.
-Cotes associatives : Deplacer, Rotation, Miroir et Echelle d'une forme entrainent les cotes
+Calculs dans le SCR de travail des outils (metres vrais) : objet couche -> travail ->
+transformation -> couche.
+Cotes associatives : Deplacer, Rotation, Miroir, Echelle et Aligner d'une forme entrainent les cotes
 et les angles poses sur elle (points mesures sur la forme), annules avec elle.
 Deplacer une cote ou un angle ne bouge que la ligne de cote / l'arc : les rappels s'adaptent.
 """
 from qgis.core import (
-    QgsCoordinateTransform, QgsFeature, QgsFeatureRequest, QgsGeometry, QgsPointXY, QgsProject,
+    Qgis, QgsFeature, QgsFeatureRequest, QgsGeometry, QgsPointXY, QgsProject,
     QgsVectorLayerUtils,
 )
-from qgis.gui import QgsRubberBand
+from qgis.gui import QgsMessageBarItem, QgsRubberBand
+from qgis.PyQt import sip
+from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QColor
+from qgis.PyQt.QtWidgets import QLabel, QSizePolicy
 
 from . import geometry as G
 from . import target as T
+from .crs import pixel_size
 from .angle_dim import angle_parts, build_angle, moved_angle
 from .dimension import dimension_geometry, dimension_parts, moved_dimension
-from .draw_tool_base import DrawTool
-from .pick import _number, editable_layers, hit_geometry, is_text_layer, pick_feature, to_layer
+from .draw_tool_base import ACCENT, DrawTool
+from .pick import _number, editable_layers, hit_geometry, is_text_layer, pick_feature
 
 STEP_PICK = 0
 LINKED_KINDS = ("dimension", "angle")
@@ -43,7 +50,7 @@ class TransformTool(DrawTool):
         self.step = STEP_PICK
         self.target = None      # (couche, QgsFeature) designe
         self.hover = None
-        self.base = None        # point de base, SCR du canevas
+        self.base = None        # point de base, SCR de travail
         self.rb_obj = None
 
     def activate(self):
@@ -74,7 +81,7 @@ class TransformTool(DrawTool):
 
     def compute(self, mouse):
         if self.step == STEP_PICK:
-            self.hover = pick_feature(self.canvas(), editable_layers(self.plugin.iface), mouse)
+            self.hover = pick_feature(self.canvas(), editable_layers(self.plugin.iface), self.frame.to_map(mouse))
             return mouse, None, None, {}, ""
         return self.compute_step(mouse)
 
@@ -108,35 +115,43 @@ class TransformTool(DrawTool):
         layer, feature = hit
         geom, attrs = None, {}
         if self.step != STEP_PICK:
-            geom = self.transform_geometry(layer, feature)
+            geom = self.preview_geometry(layer, feature)
             if geom is not None:
                 attrs = self.transform_attrs(layer, feature)
         # un texte est montre par son cadre (position, angle et taille apres transformation)
         geom = hit_geometry(self.canvas(), layer, feature, geom, attrs.get("angle"), attrs.get("taille"))
         if geom.type() != T.POLYGON:
-            geom = geom.buffer(self.canvas().mapUnitsPerPixel() * 2, 4)
+            geom = geom.buffer(pixel_size(self.canvas(), layer.crs()) * 2, 4)
         self.rb_obj.setToGeometry(geom, layer)
 
     # ------------------------------------------------------------------
     # Outils communs
     # ------------------------------------------------------------------
 
-    def layer_point(self, pt, layer):
-        """Point du canevas exprime dans le SCR de la couche."""
-        return to_layer(QgsGeometry.fromPointXY(QgsPointXY(pt)), self.canvas(), layer).asPoint()
+    def in_work(self, layer, feature):
+        """Geometrie de l'objet dans le SCR de travail (metres vrais)."""
+        return self.frame.from_layer(feature.geometry(), layer)
+
+    def transformed(self, layer, feature, q):
+        """Objet transforme par `q` dans le SCR de travail, rendu dans le SCR de sa couche."""
+        return self.frame.to_layer(G.transformed(self.in_work(layer, feature), q), layer)
 
     def center_of(self, layer, feature):
-        """Centre de l'objet (d'un texte : centre de son cadre), SCR du canevas."""
-        c = hit_geometry(self.canvas(), layer, feature).centroid().asPoint()
-        return QgsPointXY(self.canvas().mapSettings().layerToMapCoordinates(layer, c))
+        """Centre de l'objet (d'un texte : centre de son cadre), SCR de travail."""
+        c = hit_geometry(self.canvas(), layer, feature).centroid()
+        return QgsPointXY(self.frame.from_layer(c, layer).asPoint())
 
     def transform_attrs(self, layer, feature):
         """Attributs a modifier avec la geometrie (angle / taille d'un texte)."""
         return {}
 
-    def qtransform(self, layer):
-        """Transformation en cours dans le SCR de `layer` (QTransform), ou None.
-        Sert a entrainer les cotes associees ; les outils qui n'en ont pas n'entrainent rien."""
+    def preview_geometry(self, layer, feature):
+        """Objet montre en bleu pendant l'outil : transforme, ou None = a sa place."""
+        return self.transform_geometry(layer, feature)
+
+    def qtransform(self):
+        """Transformation en cours dans le SCR de travail (QTransform), ou None.
+        Sert aussi a entrainer les cotes associees ; sans elle, rien n'est entraine."""
         return None
 
     @staticmethod
@@ -193,26 +208,24 @@ class TransformTool(DrawTool):
         un seul : ce point suit, la cote garde son decalage. Angle : son sommet (ou ses
         deux cotes) sur l'objet, il suit en bloc."""
         result = []
-        project = QgsProject.instance()
-        old = QgsGeometry(feature.geometry())
-        tol = LINK_TOLERANCE_PX * self.canvas().mapUnitsPerPixel()
-        for ann in project.mapLayers().values():
+        q = self.qtransform()
+        if q is None:
+            return result
+        frame = self.frame
+        shape = frame.from_layer(feature.geometry(), layer)        # tout se calcule dans le SCR de travail
+        tol = LINK_TOLERANCE_PX * frame.pixel()
+
+        def on(p):
+            return shape.distance(QgsGeometry.fromPointXY(p)) <= tol
+
+        zone = QgsGeometry.fromRect(shape.boundingBox().buffered(tol))
+        for ann in QgsProject.instance().mapLayers().values():
             kind = _kind(ann)
             if kind not in LINKED_KINDS or ann is layer:
                 continue
-            q = self.qtransform(ann)
-            if q is None:
-                continue
-            shape = QgsGeometry(old)
-            if layer.crs() != ann.crs():
-                shape.transform(QgsCoordinateTransform(layer.crs(), ann.crs(), project))
-
-            def on(p, shape=shape):
-                return shape.distance(QgsGeometry.fromPointXY(p)) <= tol
-
-            request = QgsFeatureRequest().setFilterRect(shape.boundingBox().buffered(tol))
+            request = QgsFeatureRequest().setFilterRect(frame.to_layer(zone, ann).boundingBox())
             for f in ann.getFeatures(request):
-                g = f.geometry()
+                g = frame.from_layer(f.geometry(), ann)
                 if kind == "dimension":
                     parts = dimension_parts(g)
                     if parts is None:
@@ -226,7 +239,8 @@ class TransformTool(DrawTool):
                     if G.distance(n1, n2) == 0:
                         continue
                     new = G.transformed(g, q) if on1 and on2 else dimension_geometry(n1, n2, offset)[0]
-                    result.append((ann, QgsFeature(f), new, {"longueur": round(G.distance(n1, n2), 2)}))
+                    result.append((ann, QgsFeature(f), frame.to_layer(new, ann),
+                                   {"longueur": round(G.distance(n1, n2), 2)}))
                 else:
                     parts = angle_parts(g)
                     if parts is None:
@@ -238,7 +252,7 @@ class TransformTool(DrawTool):
                     new = _reoriented_angle(G.transformed(g, q))
                     new_parts = angle_parts(new)
                     attrs = {"longueur": round(new_parts[3], 2)} if new_parts else {}
-                    result.append((ann, QgsFeature(f), new, attrs))
+                    result.append((ann, QgsFeature(f), frame.to_layer(new, ann), attrs))
         return result
 
     # a definir par les sous-classes
@@ -297,37 +311,38 @@ class MoveTool(TransformTool):
         else:
             self.start()
 
+    def qtransform(self):
+        if self.base is None or getattr(self, "dest", None) is None:
+            return None
+        return G.translate_transform(self.dest.x() - self.base.x(), self.dest.y() - self.base.y())
+
     def offset_geometry(self, layer, feature):
-        if self.base is None or getattr(self, "dest", None) is None:
-            return None
-        b, d = self.layer_point(self.base, layer), self.layer_point(self.dest, layer)
-        geom = QgsGeometry(feature.geometry())
-        geom.translate(d.x() - b.x(), d.y() - b.y())
-        return geom
+        q = self.qtransform()
+        return self.transformed(layer, feature, q) if q is not None else None
 
-    def qtransform(self, layer):
-        if self.base is None or getattr(self, "dest", None) is None:
-            return None
-        b, d = self.layer_point(self.base, layer), self.layer_point(self.dest, layer)
-        return G.translate_transform(d.x() - b.x(), d.y() - b.y())
-
-    def move_geometry(self, layer, feature):
-        """Une cote ou un angle : seule la ligne de cote / l'arc se deplace."""
-        q = self.qtransform(layer)
+    def moved_work(self, layer, feature):
+        """Objet deplace, SCR de travail ; une cote ou un angle : seule la ligne de cote
+        / l'arc se deplace."""
+        q = self.qtransform()
         if q is None:
             return None
+        geom = self.in_work(layer, feature)
         if _kind(layer) == "dimension":
-            return moved_dimension(feature.geometry(), q.dx(), q.dy())
+            return moved_dimension(geom, q.dx(), q.dy())
         if _kind(layer) == "angle":
-            return moved_angle(feature.geometry(), q.dx(), q.dy())
-        return self.offset_geometry(layer, feature)
+            return moved_angle(geom, q.dx(), q.dy())
+        return G.transformed(geom, q)
+
+    def move_geometry(self, layer, feature):
+        geom = self.moved_work(layer, feature)
+        return self.frame.to_layer(geom, layer) if geom is not None else None
 
     def transform_geometry(self, layer, feature):
         return self.move_geometry(layer, feature) if self.step == self.STEP_DEST else None
 
     def transform_attrs(self, layer, feature):
         if _kind(layer) == "angle" and self.step == self.STEP_DEST:
-            parts = angle_parts(self.move_geometry(layer, feature))
+            parts = angle_parts(self.moved_work(layer, feature))
             return {"longueur": round(parts[3], 2)} if parts else {}
         return {}
 
@@ -417,7 +432,7 @@ class RotateTool(TransformTool):
             return mouse, None, None, {}, ""
         _, ang, _ = self.constrain_from(self.base, mouse, length_key="", angle_key="angle")
         self.angle = ang
-        far = G.polar_point(self.base, G.distance(self.base, mouse) or self.canvas().mapUnitsPerPixel() * 40, ang)
+        far = G.polar_point(self.base, G.distance(self.base, mouse) or self.frame.pixel() * 40, ang)
         return mouse, [self.base, far], "line", {"angle": ang}, ""
 
     def click_step(self, pt):
@@ -440,14 +455,14 @@ class RotateTool(TransformTool):
         else:
             self.start()
 
-    def qtransform(self, layer):
+    def qtransform(self):
         if self.step != self.STEP_ANGLE or self.base is None:
             return None
-        return G.rotate_transform(self.layer_point(self.base, layer), self.angle)
+        return G.rotate_transform(self.base, self.angle)
 
     def transform_geometry(self, layer, feature):
-        q = self.qtransform(layer)
-        return G.transformed(feature.geometry(), q) if q is not None else None
+        q = self.qtransform()
+        return self.transformed(layer, feature, q) if q is not None else None
 
     def transform_attrs(self, layer, feature):
         if not is_text_layer(layer):
@@ -483,7 +498,7 @@ class MirrorTool(TransformTool):
             return mouse, None, None, {}, ""
         pt, ang, dist = self.constrain_from(self.base, mouse, length_key="", angle_key="angle")
         self.axis_angle = ang
-        far = self.canvas().mapUnitsPerPixel() * 2000
+        far = self.frame.pixel() * 2000
         return pt, [G.polar_point(self.base, far, ang + 180), G.polar_point(self.base, far, ang)], \
             "line", {"angle": ang}, ""
 
@@ -502,17 +517,17 @@ class MirrorTool(TransformTool):
         else:
             self.start()
 
-    def qtransform(self, layer):
+    def qtransform(self):
         if self.step != self.STEP_P2 or self.axis_angle is None:
             return None
-        return G.mirror_transform(self.layer_point(self.base, layer), self.axis_angle)
+        return G.mirror_transform(self.base, self.axis_angle)
 
     def transform_geometry(self, layer, feature):
-        q = self.qtransform(layer)
+        q = self.qtransform()
         if q is None:
             return None
-        geom = G.transformed(feature.geometry(), q)
-        return _reoriented_angle(geom) if _kind(layer) == "angle" else geom
+        geom = G.transformed(self.in_work(layer, feature), q)
+        return self.frame.to_layer(_reoriented_angle(geom) if _kind(layer) == "angle" else geom, layer)
 
     def transform_attrs(self, layer, feature):
         """Texte : orientation symetrisee mais toujours lisible (jamais a l'envers)."""
@@ -559,8 +574,8 @@ class ScaleTool(TransformTool):
     def _size(self):
         """Distance souris qui vaut un facteur 1 : demi-diagonale de l'emprise de l'objet."""
         layer, feature = self.target
-        bb = feature.geometry().boundingBox()
-        return max((bb.width() ** 2 + bb.height() ** 2) ** 0.5 / 2, self.canvas().mapUnitsPerPixel() * 10)
+        bb = self.in_work(layer, feature).boundingBox()
+        return max((bb.width() ** 2 + bb.height() ** 2) ** 0.5 / 2, self.frame.pixel() * 10)
 
     def _ask_factor(self):
         self.step = self.STEP_FACTOR
@@ -615,14 +630,14 @@ class ScaleTool(TransformTool):
         else:
             self._apply()
 
-    def qtransform(self, layer):
+    def qtransform(self):
         if self.step != self.STEP_FACTOR or self.factor <= 0 or self.base is None:
             return None
-        return G.scale_transform(self.layer_point(self.base, layer), self.factor)
+        return G.scale_transform(self.base, self.factor)
 
     def transform_geometry(self, layer, feature):
-        q = self.qtransform(layer)
-        return G.transformed(feature.geometry(), q) if q is not None else None
+        q = self.qtransform()
+        return self.transformed(layer, feature, q) if q is not None else None
 
     def transform_attrs(self, layer, feature):
         if _kind(layer) in LINKED_KINDS:              # longueur mesuree / rayon de l'arc
@@ -632,6 +647,256 @@ class ScaleTool(TransformTool):
         return {"taille": max(1.0, round(_number(feature["taille"], 10.0) * self.factor, 1))}
 
     def _apply(self):
+        geom = self.transform_geometry(*self.target)
+        if geom is not None:
+            self.replace_geometry(geom, self.transform_attrs(*self.target), follow=True)
+        self.start()
+
+
+# ----------------------------------------------------------------------
+# Aligner
+# ----------------------------------------------------------------------
+
+class AlignTool(TransformTool):
+    """ALIGNER : objet -> 1er point source -> 1re destination -> 2e point source (Entree :
+    deplacer seulement) -> 2e destination -> mise a l'echelle O/N (Entree : non).
+    Le 1er point source vient sur la 1re destination, la direction source prend celle des
+    destinations (rotation autour du 1er point) ; sur O, la longueur suit aussi."""
+    NAME = "Aligner"
+    STEP_S1, STEP_D1, STEP_S2, STEP_D2, STEP_SCALE = 1, 2, 3, 4, 5
+    PROMPTS = {
+        STEP_S1: "Premier point source :",
+        STEP_D1: "Premier point de destination :",
+        STEP_S2: "Deuxième point source (Entrée : déplacer seulement) :",
+        STEP_D2: "Deuxième point de destination :",
+        STEP_SCALE: "Mettre à l'échelle ? (O : oui, N ou Entrée : non)",
+    }
+    # bandeau d'aide : une ligne d'etapes, une ligne de consigne, une ligne de touches
+    GUIDE_STEPS = ("Objet", "Point source 1", "Destination 1", "Point source 2", "Destination 2", "Échelle")
+    GUIDE_HINTS = {
+        STEP_PICK: "Cliquez l'objet à aligner : forme dessinée, ou objet de la couche active en édition.",
+        STEP_S1: "Cliquez un point de l'objet (un coin par exemple) : il viendra sur la 1re destination.",
+        STEP_D1: "Cliquez l'endroit où ce point doit arriver.",
+        STEP_S2: "Cliquez un 2e point de l'objet (en bleu) : il donne la direction. <b>Entrée</b> : simple déplacement.",
+        STEP_D2: "Cliquez un point dans la direction voulue : l'objet pivote autour de la 1re destination.",
+        STEP_SCALE: "<b>O</b> : ajuster aussi la taille aux destinations · <b>N</b> ou <b>Entrée</b> : "
+                    "garder la taille.",
+    }
+    GUIDE_KEYS = "<i>U : point précédent · Échap : recommencer · F3 : accrochage objet</i>"
+
+    def __init__(self, canvas, plugin, action):
+        super().__init__(canvas, plugin, action)
+        self.pairs = []         # [(source, destination)] valides, SCR du canevas
+        self.pending = None     # point source qui attend sa destination
+        self.dest = None        # destination sous la souris
+        self.scale = False
+        self.rb_pairs = None
+        self.guide_item = self.guide_label = None
+        self.guide_closed = False
+
+    def activate(self):
+        self.guide_closed = False
+        super().activate()
+        self.rb_pairs = QgsRubberBand(self.canvas(), T.LINE)
+        self.rb_pairs.setStrokeColor(ACCENT)
+        self.rb_pairs.setLineStyle(Qt.PenStyle.DashLine)
+        self.rb_pairs.setWidth(1)
+
+    def deactivate(self):
+        self._hide_guide()
+        if self.rb_pairs is not None:
+            self.canvas().scene().removeItem(self.rb_pairs)
+            self.rb_pairs = None
+        super().deactivate()
+
+    def start(self):
+        super().start()
+        self.pairs, self.pending, self.dest, self.scale = [], None, None, False
+        self._show_guide()
+
+    def _ask(self, step):
+        self.step = step
+        self.configure(self.PROMPTS[step])
+        self._show_guide()
+
+    def _guide_html(self):
+        steps = " › ".join(
+            f"<b><u>{name}</u></b>" if i == self.step else (f"✓ {name}" if i < self.step else name)
+            for i, name in enumerate(self.GUIDE_STEPS))
+        return f"<b>Aligner</b> : {steps}<br>{self.GUIDE_HINTS[self.step]}<br>{self.GUIDE_KEYS}"
+
+    def _show_guide(self):
+        """Bandeau bleu en haut de la carte : etapes d'ALIGNER, etape en cours soulignee.
+        Lignes coupees a la main : avec le retour a la ligne automatique, la barre de
+        messages garde la hauteur calculee sur la largeur initiale. Largeur minimale
+        1 px : le bandeau ne doit jamais elargir la fenetre QGIS. Ferme par sa croix,
+        il ne revient qu'a la prochaine activation de l'outil."""
+        if self.dyn is None or self.guide_closed:
+            return
+        bar = self.plugin.iface.messageBar()
+        if self.guide_item is not None and (sip.isdeleted(self.guide_item) or self.guide_item not in bar.items()):
+            self.guide_item = self.guide_label = None       # ferme (croix, « Tout fermer »)
+            self.guide_closed = True
+            return
+        if self.guide_item is None:
+            self.guide_label = QLabel()
+            self.guide_label.setTextFormat(Qt.TextFormat.RichText)
+            self.guide_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+            self.guide_label.setMinimumWidth(1)
+            self.guide_item = QgsMessageBarItem(self.guide_label, Qgis.MessageLevel.Info, 0)
+            bar.pushItem(self.guide_item)
+        self.guide_label.setText(self._guide_html())
+
+    def _hide_guide(self):
+        item, self.guide_item, self.guide_label = self.guide_item, None, None
+        bar = self.plugin.iface.messageBar()
+        if item is not None and not sip.isdeleted(item) and item in bar.items():
+            bar.popWidget(item)
+
+    def after_pick(self):
+        self._ask(self.STEP_S1)
+
+    def _points(self):
+        """s1, d1[, s2, d2] en cours (destination sous la souris comprise), SCR de travail."""
+        pts = [p for pair in self.pairs for p in pair]
+        if self.pending is not None and self.dest is not None:
+            pts += [self.pending, self.dest]
+        return pts
+
+    def _params(self):
+        pts = self._points()
+        return G.align_transform(*pts, scale=self.scale) if pts else None
+
+    def _info(self):
+        """Rotation et facteur des deux paires (barre d'etat)."""
+        pts = self._points()
+        params = G.align_transform(*pts, scale=True) if len(pts) == 4 else None
+        if params is None:
+            return ""
+        return f"Rotation {G.deflection(params[1], 0.0):.1f}° · facteur {params[2]:.4f}".replace(".", ",")
+
+    def _same(self, a, b):
+        return G.distance(a, b) < self.frame.pixel() / 2
+
+    def compute_step(self, mouse):
+        if self.step in (self.STEP_S1, self.STEP_S2):
+            self.dest = None
+            return mouse, None, None, {}, ""
+        if self.step == self.STEP_SCALE:
+            return mouse, None, None, {}, self._info()
+        # 1re destination : ortho depuis le point source (comme Deplacer) ;
+        # 2e destination : ortho depuis la 1re destination (direction d'alignement)
+        origin = self.pending if self.step == self.STEP_D1 else self.pairs[0][1]
+        pt, _, _ = self.constrain_from(origin, mouse, length_key="", angle_key="")
+        self.dest = pt
+        return pt, [self.pending, pt], "line", {}, self._info()
+
+    def click_step(self, pt):
+        if self.step in (self.STEP_S1, self.STEP_S2):
+            if self.step == self.STEP_S2 and self._same(pt, self.pairs[0][0]):
+                self.plugin.warn("Aligner : le deuxième point source est confondu avec le premier.")
+                return
+            self.pending = pt
+            self.points = [pt]
+            self._ask(self.step + 1)
+        elif self.step in (self.STEP_D1, self.STEP_D2):
+            if self.step == self.STEP_D2 and self._same(pt, self.pairs[0][1]):
+                self.plugin.warn("Aligner : la deuxième destination est confondue avec la première.")
+                return
+            self.pairs.append((self.pending, pt))
+            self.pending = self.dest = None
+            self.points = [pt]
+            if len(self.pairs) == 1:
+                self._ask(self.STEP_S2)
+            else:
+                self._after_second_pair()
+        else:
+            self._apply(scale=False)            # clic : reponse par defaut (non)
+
+    def _after_second_pair(self):
+        params = G.align_transform(*self._points(), scale=True)
+        if params is not None and abs(params[2] - 1.0) < 1e-6:
+            self._apply(scale=False)            # longueurs egales : rien a demander
+        else:
+            self._ask(self.STEP_SCALE)
+
+    def finish_step(self):
+        if self.step in (self.STEP_S2, self.STEP_D2):
+            self.pairs = self.pairs[:1]         # Entree apres la 1re paire : deplacer seulement
+            self.pending = self.dest = None
+            self._apply(scale=False)
+        elif self.step == self.STEP_SCALE:
+            self._apply(scale=False)
+        else:
+            self.start()
+
+    def undo_point(self):
+        """U / Retour arriere : revient au point precedent."""
+        if self.step in (self.STEP_D1, self.STEP_D2):
+            self.pending = self.dest = None
+            self._ask(self.step - 1)
+        elif self.step in (self.STEP_S2, self.STEP_SCALE):
+            self.pending = self.pairs.pop()[0]  # la paire redevient « source en attente »
+            self._ask(self.step - 1)
+        else:
+            self.start()
+            return
+        last = self.pending or (self.pairs[-1][1] if self.pairs else None)
+        self.points = [last] if last is not None else []
+
+    def keyPressEvent(self, event):
+        if self.step == self.STEP_SCALE and self.dyn is not None and event.key() in (Qt.Key.Key_O, Qt.Key.Key_N):
+            event.accept()
+            self._apply(scale=event.key() == Qt.Key.Key_O)
+            self.refresh()
+            return
+        super().keyPressEvent(event)
+
+    def _wants(self, event):
+        return super()._wants(event) or (
+            self.step == self.STEP_SCALE and event.key() in (Qt.Key.Key_O, Qt.Key.Key_N))
+
+    def draw_extra(self):
+        super().draw_extra()
+        if self.rb_pairs is None:
+            return
+        self.rb_pairs.reset(T.LINE)
+        if self.pairs:
+            pairs = QgsGeometry.fromMultiPolylineXY([[s, d] for s, d in self.pairs])
+            self.rb_pairs.setToGeometry(self.frame.geom_to_map(pairs), None)
+
+    def qtransform(self):
+        params = self._params()
+        return params[0] if params else None
+
+    def preview_geometry(self, layer, feature):
+        # points source : l'objet reste montre a sa place, c'est sur lui (et non sur un
+        # apercu deja deplace, ou rien ne s'accroche) qu'on les clique, comme dans AutoCAD
+        if self.step in (self.STEP_S1, self.STEP_S2):
+            return None
+        return self.transform_geometry(layer, feature)
+
+    def transform_geometry(self, layer, feature):
+        q = self.qtransform()
+        return self.transformed(layer, feature, q) if q is not None else None
+
+    def transform_attrs(self, layer, feature):
+        """Comme Rotation (angle d'un texte) et Echelle (taille, longueur d'une cote)."""
+        params = self._params()
+        if params is None:
+            return {}
+        _, angle, factor = params
+        if _kind(layer) in LINKED_KINDS:
+            return {"longueur": round(_number(feature["longueur"], 0.0) * factor, 2)} if factor != 1.0 else {}
+        if not is_text_layer(layer):
+            return {}
+        attrs = {"angle": round((_number(feature["angle"], 0.0) + angle) % 360.0, 2)}
+        if factor != 1.0:
+            attrs["taille"] = max(1.0, round(_number(feature["taille"], 10.0) * factor, 1))
+        return attrs
+
+    def _apply(self, scale):
+        self.scale = scale
         geom = self.transform_geometry(*self.target)
         if geom is not None:
             self.replace_geometry(geom, self.transform_attrs(*self.target), follow=True)
