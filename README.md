@@ -7,6 +7,7 @@
 **Deux barres d'outils QGIS façon DAO : nettoyer l'affichage d'un clic sur la carte, et dessiner à la cote**
 
 [![QGIS](https://img.shields.io/badge/QGIS-3.16%2B-green?logo=qgis&logoColor=white)](https://qgis.org)
+[![Style](https://img.shields.io/badge/style-DAO%20%2F%20CAD-c0392b)](#barre-box_cad-dessin)
 [![Version](https://img.shields.io/badge/version-1.3.0-blue)](metadata.txt)
 [![License](https://img.shields.io/badge/license-GPL%20v3-orange)](LICENSE)
 [![Docs](https://img.shields.io/badge/docs-FR%20%7C%20EN%20%7C%20ES%20%7C%20PT%20%7C%20DE-lightgrey)](#français)
