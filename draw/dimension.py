@@ -1,4 +1,4 @@
-"""COTE facon cotation alignee AutoCAD : point 1 -> point 2 -> position de la cote.
+"""COTE facon cotation alignee de DAO : point 1 -> point 2 -> position de la cote.
 
 Geometrie enregistree (MultiLineString, brouillon « Box_cad dessin – cotes ») :
   partie 1 = ligne de cote (fleches aux deux bouts, etiquette = longueur mesuree)

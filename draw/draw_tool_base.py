@@ -344,7 +344,7 @@ class DrawTool(QgsMapTool):
         dist = G.distance(base, mouse)
         ang = G.angle_of(base, mouse) if dist > 0 else origin
         if self.snapped and locked_len is None and locked_ang is None:
-            return mouse, ang, dist        # l'accrochage objet l'emporte (comme AutoCAD)
+            return mouse, ang, dist        # l'accrochage objet l'emporte (comme en DAO)
         guide = False
         if locked_ang is not None:
             ang, guide = (origin + locked_ang) % 360.0, True

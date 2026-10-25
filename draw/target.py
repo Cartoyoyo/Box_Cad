@@ -272,7 +272,7 @@ def _label_property(settings, name, expression):
 
 
 def _text_labels(layer):
-    """Textes : taille en points (fixe a l'ecran), angle anti-horaire facon AutoCAD,
+    """Textes : taille en points (fixe a l'ecran), angle anti-horaire comme en DAO,
     point d'insertion en bas a gauche du texte, toujours affiches."""
     settings = QgsPalLayerSettings()
     settings.fieldName = "texte"

@@ -2,26 +2,26 @@
 name=Box_cad
 qgisMinimumVersion=3.16
 qgisMaximumVersion=3.99
-description=FR: Masquer des couches ou entites par clic et dessiner a la cote, style AutoCAD
-    EN: Hide layers or features by click and draw with typed dimensions, AutoCAD style
-about=FR: Barre d'outils de nettoyage rapide de l'affichage, inspiree d'AutoCAD Map : localiser la couche d'un objet par clic,
+description=FR: Masquer des couches ou entites par clic et dessiner a la cote, facon DAO
+    EN: Hide layers or features by click and draw with typed dimensions, CAD-style
+about=FR: Barre d'outils de nettoyage rapide de l'affichage, inspiree des logiciels de DAO : localiser la couche d'un objet par clic,
     masquer une couche ou une entite par clic, supprimer des entites par clic ou au lasso (avec confirmation),
     tout afficher / tout eteindre, trier les couches par type de geometrie et changer l'ordre d'une couche par clic.
     Barre Dessin : ligne, polyligne, rectangle (orientable), carre et cercle avec longueurs et angles tapes
-    pres du curseur, accrochage et ortho ; deplacer, copier, rotation, miroir, echelle et aligner facon AutoCAD ;
+    pres du curseur, accrochage et ortho ; deplacer, copier, rotation, miroir, echelle et aligner comme en DAO ;
     mesures en metres vrais quel que soit le SCR du projet.
     Chaque action est annulable. Auteur : Yoan Laloux - https://www.linkedin.com/in/ylaloux/
-    EN: Quick display cleanup toolbar, AutoCAD Map style: locate a feature's layer by click, hide a layer or a feature by click,
+    EN: Quick display cleanup toolbar, CAD-software style: locate a feature's layer by click, hide a layer or a feature by click,
     delete features by click or lasso (with confirmation), show all / hide all, sort layers by geometry type
     and reorder a layer by click. Drawing toolbar: line, polyline, rectangle (rotatable), square and circle with
-    typed lengths and angles next to the cursor, snapping and ortho; AutoCAD-style move, copy, rotate, mirror, scale and align;
+    typed lengths and angles next to the cursor, snapping and ortho; CAD-style move, copy, rotate, mirror, scale and align;
     true metres in any project CRS. Every action can be undone. Author: Yoan Laloux - https://www.linkedin.com/in/ylaloux/
 version=1.2.1
 changelog=1.2.1
     - Message de SCR de travail raccourci, il tient sur une ligne / shorter work CRS message
     - Captures des nouveautes dans le README / README screenshots of the new features
     1.2.0
-    - Aligner facon AutoCAD : 2 paires de points source / destination, mise a l'echelle O/N, bandeau d'aide pas a pas / AutoCAD-style Align with step-by-step help banner
+    - Aligner : 2 paires de points source / destination, mise a l'echelle O/N, bandeau d'aide pas a pas / Align tool (two point pairs) with step-by-step help banner
     - Mesures en metres vrais quel que soit le SCR du projet : WGS 84 ou Web Mercator calcules en Lambert 93 ou UTM / true metres in any project CRS
     - Points source d'Aligner pris sur l'objet a sa place, avec accrochage / Align source points picked on the object itself, with snapping
     - Accents des messages / message accents

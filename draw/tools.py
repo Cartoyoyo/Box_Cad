@@ -122,7 +122,7 @@ class PolylineTool(ChainedSegments, DrawTool):
             self.plugin.warn("Il faut au moins 3 points pour fermer la polyligne.")
             return
         # Fermee : polygone si la couche active est une couche polygone en edition,
-        # sinon ligne fermee (comme une polyligne fermee AutoCAD)
+        # sinon ligne fermee (comme une polyligne fermee en DAO)
         if T.active_target(self.plugin.iface, "polygon") is not None:
             self.commit(G.polygon_geometry(self.points), "polygon")
         else:

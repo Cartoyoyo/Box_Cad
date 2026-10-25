@@ -1,4 +1,4 @@
-"""ANGLE facon cotation angulaire AutoCAD : deux lignes, ou (Entree) sommet + deux points,
+"""ANGLE facon cotation angulaire de DAO : deux lignes, ou (Entree) sommet + deux points,
 puis position de l'arc. Le cote ou l'on pose l'arc choisit l'angle mesure.
 
 Geometrie enregistree (MultiLineString, brouillon « Box_cad dessin – angles ») :

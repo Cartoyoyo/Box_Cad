@@ -1,4 +1,4 @@
-"""Transformations facon AutoCAD sur UN objet : Deplacer, Copier, Rotation, Miroir, Echelle,
+"""Transformations facon DAO sur UN objet : Deplacer, Copier, Rotation, Miroir, Echelle,
 Aligner.
 
 Etapes communes : designer l'objet (surbrillance au survol) -> point(s) -> valeur.
@@ -871,7 +871,7 @@ class AlignTool(TransformTool):
 
     def preview_geometry(self, layer, feature):
         # points source : l'objet reste montre a sa place, c'est sur lui (et non sur un
-        # apercu deja deplace, ou rien ne s'accroche) qu'on les clique, comme dans AutoCAD
+        # apercu deja deplace, ou rien ne s'accroche) qu'on les clique, comme en DAO
         if self.step in (self.STEP_S1, self.STEP_S2):
             return None
         return self.transform_geometry(layer, feature)

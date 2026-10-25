@@ -4,7 +4,7 @@
 
 <img src="icon.png" width="80" alt="Box_cad icon"/>
 
-**Deux barres d'outils QGIS façon AutoCAD : nettoyer l'affichage d'un clic sur la carte, et dessiner à la cote**
+**Deux barres d'outils QGIS façon DAO : nettoyer l'affichage d'un clic sur la carte, et dessiner à la cote**
 
 [![QGIS](https://img.shields.io/badge/QGIS-3.16%2B-green?logo=qgis&logoColor=white)](https://qgis.org)
 [![Version](https://img.shields.io/badge/version-1.2.1-blue)](metadata.txt)
@@ -81,7 +81,7 @@ Fini les allers-retours entre la carte et un panneau de couches de 40 lignes : c
 
 ### Barre Box_cad Dessin
 
-Comme dans AutoCAD, on clique un premier point puis on **tape les valeurs** dans les champs qui suivent le curseur : la souris ne donne plus que la direction. Près du curseur, seules les valeurs s'affichent ; l'étape en cours, le nom des champs (champ actif en gras) et les touches sont dans la **barre d'état** de QGIS.
+Comme dans un logiciel de DAO, on clique un premier point puis on **tape les valeurs** dans les champs qui suivent le curseur : la souris ne donne plus que la direction. Près du curseur, seules les valeurs s'affichent ; l'étape en cours, le nom des champs (champ actif en gras) et les touches sont dans la **barre d'état** de QGIS.
 
 Les outils sont rangés dans **3 boutons à menu** — **Tracer ▾**, **Modifier ▾**, **Annoter ▾** — qui affichent le dernier outil utilisé (un clic le relance, la flèche ouvre la liste), suivis des modes Remplissage, Accrochage et Ortho, puis d'une **pastille** qui montre la couleur, l'épaisseur et la couche qui recevra le dessin (clic : propriétés courantes). Tous les outils sont aussi dans le menu *Extensions → Box_cad*, rangé comme CanaPlan : Annuler en tête, puis un sous-menu par thème — Objets, Affichage, Ordre des couches, Tracer, Modifier, Annoter, Modes de dessin — et À propos.
 
@@ -120,7 +120,7 @@ Les outils sont rangés dans **3 boutons à menu** — **Tracer ▾**, **Modifie
 | F3 | active / désactive l'accrochage objet |
 
 - **Angle relatif** : dès le 2e segment d'une ligne ou polyligne, l'angle tapé est une déviation par rapport au segment précédent (0 = tout droit, +90 = virage à gauche, −90 = à droite) ; l'ortho s'aimante aussi par rapport à ce segment. La touche A repasse en angle absolu.
-- **Conventions AutoCAD** : angles en degrés, 0° = est, sens anti-horaire ; longueurs en unités de la carte (mètres en Lambert 93).
+- **Conventions habituelles de la DAO** : angles en degrés, 0° = est, sens anti-horaire ; longueurs en unités de la carte (mètres en Lambert 93).
 - **Couche cible** : la couche active si elle est en édition et du bon type (ligne ou polygone), avec le formulaire d'attributs QGIS et Ctrl+Z ; sinon une couche brouillon **en mémoire** « Box_cad dessin – lignes / polygones » (champs `outil`, `longueur`, `surface`), à exporter pour la conserver.
 - **Accrochage objet Box_cad (façon OSNAP)**, indépendant de la configuration d'accrochage QGIS : un marqueur vert s'affiche sur le point, et son nom (« Centre », « Quadrant »…) dans la barre d'état.
 
@@ -135,14 +135,14 @@ Les outils sont rangés dans **3 boutons à menu** — **Tracer ▾**, **Modifie
   | Perpendiculaire ▽ | pied de la perpendiculaire depuis le point précédent |
   | Proche ⧗ | n'importe quel point d'un segment ou de la circonférence |
 
-  Les cercles, centres de polygones, quadrants et points opposés sont reconnus sur les **dessins Box_cad** (lus directement). Sur vos **autres couches**, Box_cad s'appuie sur les index de QGIS, construits en arrière-plan sans bloquer : extrémité, milieu, intersection, perpendiculaire et proche. Une couche dont l'index est en cours de construction (quelques secondes, une seule fois) n'est pas encore accrochable. Si rien n'est trouvé, l'accrochage QGIS habituel s'applique (s'il est activé) ; l'accrochage l'emporte sur l'ortho, comme dans AutoCAD.
+  Les cercles, centres de polygones, quadrants et points opposés sont reconnus sur les **dessins Box_cad** (lus directement). Sur vos **autres couches**, Box_cad s'appuie sur les index de QGIS, construits en arrière-plan sans bloquer : extrémité, milieu, intersection, perpendiculaire et proche. Une couche dont l'index est en cours de construction (quelques secondes, une seule fois) n'est pas encore accrochable. Si rien n'est trouvé, l'accrochage QGIS habituel s'applique (s'il est activé) ; l'accrochage l'emporte sur l'ortho, comme en DAO.
 - **Remplissage** : désactivé par défaut, les formes sont vides (contour seul) ; chaque forme garde son état dans le champ `rempli` de la couche brouillon.
 - **Cote** : ligne de cote fléchée, lignes de rappel et étiquette de longueur, dans la couche brouillon « Box_cad dessin – cotes ».
 - **Déplacer, Copier, Miroir, Échelle, Aligner** (et Rotation) : agissent sur les formes dessinées (bouton Annuler) et sur la couche active en édition (Ctrl+Z). Une copie dans une couche de données reprend les attributs mais pas la clé primaire (nouveau fid), et ne recopie pas les objets liés par relation.
-- **Texte** : brouillon « Box_cad dessin – textes » ; taille en points, fixe à l'écran ; angle anti-horaire comme dans AutoCAD. Un texte se désigne en cliquant n'importe où sur ses lettres : Déplacer, Copier, Gomme et Propriétés s'y appliquent ; la Rotation l'incline, l'Échelle change sa taille, le Miroir le reporte de l'autre côté de l'axe en le gardant lisible.
+- **Texte** : brouillon « Box_cad dessin – textes » ; taille en points, fixe à l'écran ; angle anti-horaire, comme en DAO. Un texte se désigne en cliquant n'importe où sur ses lettres : Déplacer, Copier, Gomme et Propriétés s'y appliquent ; la Rotation l'incline, l'Échelle change sa taille, le Miroir le reporte de l'autre côté de l'axe en le gardant lisible.
 - **Propriétés** : couleur, épaisseur, type de trait (continu, tirets, pointillés, mixte), remplissage et opacité, forme par forme, sur les dessins Box_cad uniquement ; la case « Utiliser pour les prochaines formes » les rend courantes (mémorisées).
 - **Rotation** : agit sur les formes dessinées (bouton Annuler) et sur la couche active en édition (Ctrl+Z) ; l'objet tourné est prévisualisé en bleu, l'angle suit la souris ou se tape, l'ortho l'aimante.
-- **Aligner** : la commande ALIGNER d'AutoCAD, en 2D. Le 1er point source vient sur la 1re destination et la direction des points source prend celle des destinations ; **O** met aussi à l'échelle (rapport des deux longueurs), question sautée si elles sont égales. Entrée après la 1re paire : simple déplacement ; U revient au point précédent. Les paires déjà données restent tracées en pointillés ; pendant le choix des points source, l'objet reste montré en bleu à sa place (c'est sur lui que l'accrochage prend les points), et l'aperçu déplacé ou tourné ne suit la souris que pendant le choix des destinations ; un texte tourne et, sur O, change de taille ; les cotes posées sur la forme suivent. Un bandeau bleu en haut de la carte guide pas à pas : étapes (faites cochées, en cours soulignée), consigne de l'étape et touches utiles ; sa croix le ferme jusqu'à la prochaine activation de l'outil.
+- **Aligner** : alignement par deux paires de points (source → destination), en 2D. Le 1er point source vient sur la 1re destination et la direction des points source prend celle des destinations ; **O** met aussi à l'échelle (rapport des deux longueurs), question sautée si elles sont égales. Entrée après la 1re paire : simple déplacement ; U revient au point précédent. Les paires déjà données restent tracées en pointillés ; pendant le choix des points source, l'objet reste montré en bleu à sa place (c'est sur lui que l'accrochage prend les points), et l'aperçu déplacé ou tourné ne suit la souris que pendant le choix des destinations ; un texte tourne et, sur O, change de taille ; les cotes posées sur la forme suivent. Un bandeau bleu en haut de la carte guide pas à pas : étapes (faites cochées, en cours soulignée), consigne de l'étape et touches utiles ; sa croix le ferme jusqu'à la prochaine activation de l'outil.
 - **SCR du projet** : les mesures sont toujours en mètres vrais. Projet en mètres sans déformation (Lambert 93, CC, UTM…) : rien ne change. Projet en degrés (WGS 84) ou en Web Mercator (les longueurs y sont faussées d'environ 44 % à la latitude de Vichy) : Box_cad calcule en Lambert 93 en France métropolitaine, sinon dans la zone UTM du centre de la carte (réévalué quand on déplace la vue, entre deux formes), et l'indique une fois par un message. Les nouveaux brouillons sont créés dans ce SCR métrique ; accrochage, cotes, transformations et aperçus suivent.
 - **Gomme** : n'agit que sur les couches brouillon « Box_cad dessin » visibles, jamais sur vos données ; la forme visée est surlignée en rouge (la plus petite si plusieurs se superposent) ; le bouton Annuler restaure le dernier effacement.
 
@@ -204,7 +204,7 @@ No more back-and-forth between the map and a 40-row layers panel: click what is 
 - **Layer order by click**: to top, up, down, to bottom.
 - **Existing filters kept**: hiding a feature adds to the layer's current filter; *Show all* restores it untouched.
 - **Safe delete**: if the layer is already in edit mode, the deletion stays in your edit session instead of being committed.
-- **Drawing toolbar (AutoCAD style)**: line, polyline, rectangle, rotated rectangle, square, circle, rotation (draft shapes or active layer in edit mode), align (AutoCAD ALIGN: two source → destination point pairs, optional scaling) and an eraser for draft shapes. Click a first point, then type length / angle / width / height / radius in the fields next to the cursor (Tab next field, Enter validate, Esc cancel, U undo last point). Snapping and ortho (F8). Shapes go to the active layer when it is in edit mode and of the right type, otherwise to an in-memory draft layer.
+- **Drawing toolbar (CAD-style)**: line, polyline, rectangle, rotated rectangle, square, circle, rotation (draft shapes or active layer in edit mode), align (two source → destination point pairs, optional scaling) and an eraser for draft shapes. Click a first point, then type length / angle / width / height / radius in the fields next to the cursor (Tab next field, Enter validate, Esc cancel, U undo last point). Snapping and ortho (F8). Shapes go to the active layer when it is in edit mode and of the right type, otherwise to an in-memory draft layer.
 
 ### Requirements
 
@@ -242,8 +242,8 @@ Box_cad añade a QGIS una barra de 12 herramientas que actúan directamente sobr
 - **Localizar capa**, **eliminar entidad** (clic o lazo, con confirmación), **ocultar capa**, **ocultar entidad**.
 - **Deshacer**, **mostrar todo**, **apagar todo**.
 - **Ordenar por geometría** (puntos, líneas, polígonos) y **orden de capas** por clic.
-- **Barra de dibujo** estilo AutoCAD: línea, polilínea, rectángulo, cuadrado y círculo con longitudes y ángulos tecleados.
-- **Alinear** (ALIGN de AutoCAD) y medidas en metros reales sea cual sea el SRC del proyecto.
+- **Barra de dibujo** estilo CAD: línea, polilínea, rectángulo, cuadrado y círculo con longitudes y ángulos tecleados.
+- **Alinear** (dos pares de puntos origen → destino) y medidas en metros reales sea cual sea el SRC del proyecto.
 
 ### Instalación
 
@@ -264,8 +264,8 @@ O Box_cad adiciona ao QGIS uma barra de 12 ferramentas que atuam diretamente sob
 - **Localizar camada**, **eliminar elemento** (clique ou laço, com confirmação), **ocultar camada**, **ocultar elemento**.
 - **Anular**, **mostrar tudo**, **apagar tudo**.
 - **Ordenar por geometria** (pontos, linhas, polígonos) e **ordem das camadas** por clique.
-- **Barra de desenho** estilo AutoCAD: linha, polilinha, retângulo, quadrado e círculo com comprimentos e ângulos digitados.
-- **Alinhar** (ALIGN do AutoCAD) e medidas em metros reais qualquer que seja o SRC do projeto.
+- **Barra de desenho** estilo CAD: linha, polilinha, retângulo, quadrado e círculo com comprimentos e ângulos digitados.
+- **Alinhar** (dois pares de pontos origem → destino) e medidas em metros reais qualquer que seja o SRC do projeto.
 
 ### Instalação
 
@@ -286,8 +286,8 @@ Box_cad fügt QGIS eine Werkzeugleiste mit 12 Werkzeugen hinzu, die direkt auf d
 - **Layer finden**, **Objekt löschen** (Klick oder Lasso, mit Bestätigung), **Layer ausblenden**, **Objekt ausblenden**.
 - **Rückgängig**, **alles einblenden**, **alles ausblenden**.
 - **Nach Geometrie sortieren** (Punkte, Linien, Polygone) und **Layer-Reihenfolge** per Klick.
-- **Zeichenleiste** im AutoCAD-Stil: Linie, Polylinie, Rechteck, Quadrat und Kreis mit eingetippten Längen und Winkeln.
-- **Ausrichten** (AutoCAD-ALIGN) und Maße in echten Metern in jedem Projekt-KBS.
+- **Zeichenleiste** im CAD-Stil: Linie, Polylinie, Rechteck, Quadrat und Kreis mit eingetippten Längen und Winkeln.
+- **Ausrichten** (zwei Punktpaare Quelle → Ziel) und Maße in echten Metern in jedem Projekt-KBS.
 
 ### Installation
 
@@ -315,7 +315,7 @@ Le détail est dans [`CHANGELOG.md`](CHANGELOG.md).
 | Version | Notes |
 |---------|-------|
 | **1.2.1** | Message « mètres vrais » raccourci (tient sur une ligne) — Captures d'Aligner et des mesures en mètres vrais |
-| **1.2.0** | Aligner façon AutoCAD avec bandeau d'aide pas à pas — Mesures en mètres vrais quel que soit le SCR du projet (WGS 84, Web Mercator) — Accents des messages |
+| **1.2.0** | Aligner (deux paires de points) avec bandeau d'aide pas à pas — Mesures en mètres vrais quel que soit le SCR du projet (WGS 84, Web Mercator) — Accents des messages |
 | **1.1.0** | Barre Box_cad Dessin en 3 menus — Déplacer, Copier, Miroir, Échelle — Polygone — Texte — Propriétés — Accrochage objet (F3) — Cote — Angle — Remplissage à la demande — Angle relatif — Rotation — Gomme — Saisie dynamique près du curseur — Accrochage, ortho — Couche active ou brouillon mémoire |
 | **1.0.0** | Première version publique — Jeu d'icônes harmonisé — Filtres de couche conservés — Suppression sans enregistrement forcé — Tri annulable — Menu Extensions et fenêtre À propos — Compatibilité Qt6 |
 
@@ -327,7 +327,7 @@ Le détail est dans [`CHANGELOG.md`](CHANGELOG.md).
 
 Développé par / Developed by **Yoan Laloux**
 
-Technicien SIG — Vichy Communauté · GIS Technician — Vichy Communauté
+Technicien SIG · GIS Technician
 
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-ylaloux-0A66C2?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/ylaloux/)
 [![GitHub](https://img.shields.io/badge/GitHub-Cartoyoyo-black?logo=github)](https://github.com/Cartoyoyo)

@@ -1,6 +1,6 @@
 """Calculs geometriques purs des outils de dessin (sans interface, testables seuls).
 
-Conventions AutoCAD : angles en degres, 0 = est, sens anti-horaire.
+Conventions de la DAO : angles en degres, 0 = est, sens anti-horaire.
 Toutes les coordonnees sont dans le SCR du canevas (unites de la carte).
 """
 import math

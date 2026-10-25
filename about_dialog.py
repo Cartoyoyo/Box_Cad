@@ -66,7 +66,7 @@ class AboutDialog(QDialog):
         sep = "&nbsp;&nbsp;"
         badges = QLabel('<div style="line-height:220%">'
                         + _badge("https://qgis.org", "badge-qgis.png") + sep
-                        + _badge(REPO, "badge-autocad.png") + sep
+                        + _badge(REPO, "badge-style.png") + sep
                         + _badge(f"{REPO}#readme", "badge-doc.png") + "</div>")
         badges.setAlignment(center)
         badges.setWordWrap(True)

@@ -1,4 +1,4 @@
-"""Accrochage objet facon AutoCAD (OSNAP), independant de l'accrochage QGIS.
+"""Accrochage objet facon DAO, independant de l'accrochage QGIS.
 
 Points proposes (si le mode est coche) : extremite, milieu, centre (cercle exact ou
 centre geometrique d'un polygone), quadrant, proche, oppose (diametralement oppose

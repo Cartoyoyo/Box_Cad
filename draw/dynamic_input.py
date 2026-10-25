@@ -1,4 +1,4 @@
-"""Saisie dynamique facon AutoCAD : invite + champs qui suivent le curseur.
+"""Saisie dynamique facon DAO : invite + champs qui suivent le curseur.
 
 Le widget ne prend jamais le focus : l'outil de carte lui transmet les touches.
 Chaque champ a trois etats :
@@ -90,7 +90,7 @@ class DynamicInput(QFrame):
 
     def locked(self, key):
         """Valeur imposee : verrouillee, ou en cours de frappe si elle est deja lisible
-        (l'apercu suit la saisie, comme dans AutoCAD)."""
+        (l'apercu suit la saisie, comme en DAO)."""
         for f in self._fields:
             if f["key"] == key:
                 if f["locked"] is not None:
