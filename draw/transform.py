@@ -25,7 +25,7 @@ from . import geometry as G
 from . import target as T
 from .crs import pixel_size
 from .angle_dim import angle_parts, build_angle, moved_angle
-from .dimension import dimension_geometry, dimension_parts, moved_dimension
+from .dimension import dimension_geometry, dimension_parts, moved_dimension, path_parts
 from .draw_tool_base import ACCENT, KEYS_DRAW, DrawTool
 from .pick import _number, editable_layers, features_in_lasso, hit_geometry, is_text_layer, pick_feature
 
@@ -49,6 +49,17 @@ def _key(hit):
 
 def _count(n):
     return f"{n} objet" + ("s" if n > 1 else "")
+
+
+def _linked_length(feature, p1, p2, n1, n2):
+    """Longueur d'une cote associee apres transformation. Une cote d'objet porte la longueur TOTALE
+    de l'objet (pas la corde) : elle suit le rapport des cordes (1 pour un deplacement, une rotation
+    ou un miroir ; le facteur pour une mise a l'echelle). Une cote ordinaire garde sa corde."""
+    old_chord, new_chord = G.distance(p1, p2), G.distance(n1, n2)
+    stored = _number(feature["longueur"], None) if "longueur" in feature.fields().names() else None
+    if stored and old_chord > 0 and abs(stored - old_chord) > 0.01 * old_chord:
+        return round(stored * new_chord / old_chord, 2)
+    return round(new_chord, 2)
 
 
 class TransformTool(DrawTool):
@@ -415,13 +426,15 @@ class TransformTool(DrawTool):
                     on1, on2 = on(p1), on(p2)
                     if not (on1 or on2):
                         continue
+                    if not (on1 and on2) and path_parts(g) is not None:
+                        continue         # cote qui suit un objet : elle ne bouge qu'avec l'objet entier
                     n1 = G.map_point(q, p1) if on1 else p1
                     n2 = G.map_point(q, p2) if on2 else p2
                     if G.distance(n1, n2) == 0:
                         continue
                     new = G.transformed(g, q) if on1 and on2 else dimension_geometry(n1, n2, offset)[0]
                     result.append((ann, QgsFeature(f), frame.to_layer(new, ann),
-                                   {"longueur": round(G.distance(n1, n2), 2)}))
+                                   {"longueur": _linked_length(f, p1, p2, n1, n2)}))
                 else:
                     parts = angle_parts(g)
                     if parts is None:

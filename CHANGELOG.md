@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.4.0 — 2026-11-11
+
+### Ajouts
+- **Gomme, Annuler et Rétablir** sont des boutons à part entière de la barre *Box_cad Dessin* (la Gomme n'est plus dans le menu Modifier ▾). Annuler reste aussi dans la barre principale, où Rétablir le suit.
+- **Rétablir** : rejoue l'action qu'on vient d'annuler, une à une (dessins, gomme, déplacements et autres transformations, propriétés, suppressions, masquages, tri des couches). Toute nouvelle action vide la liste des actions rétablissables. Menu *Extensions → Box_cad* : Rétablir suit Annuler.
+- **Cote objet** (Annoter ▾) : un clic sur une forme dessinée ou un objet de la couche active en édition, puis la position de la cote. Elle porte la **longueur totale** de l'objet (polyligne : somme des segments ; polygone, cercle : périmètre). Sur une polyligne d'au moins 3 sommets, la ligne de cote **suit la polyligne**, décalée à la souris ou d'une valeur tapée, avec une pointe à chaque bout et deux lignes de rappel ; sur un segment, une forme fermée ou un objet en plusieurs parties, la cote reste droite entre le premier et le dernier sommet (forme fermée : le plus éloigné).
+- La cote d'un objet est **associée** : elle suit l'objet déplacé, tourné, copié ou mis à l'échelle en gardant la longueur totale. Une cote qui suit un objet ne bouge qu'avec l'objet entier ; déplacée seule, elle garde la forme de l'objet.
+
+### Modifications
+- Style des cotes en version 5 : les couches « Box_cad dessin – cotes » existantes sont restylées automatiquement (nouveau symbole pour les cotes qui suivent un objet ; les cotes droites gardent l'ancien).
+- Les sommets confondus d'une polyligne sont ignorés pour décaler la cote, et un décalage qui s'effondre retombe sur une cote droite.
+
 ## 1.3.0 — 2026-10-25
 
 ### Ajouts

@@ -8,7 +8,7 @@
 
 [![QGIS](https://img.shields.io/badge/QGIS-3.16%2B-green?logo=qgis&logoColor=white)](https://qgis.org)
 [![Style](https://img.shields.io/badge/style-DAO%20%2F%20CAD-c0392b)](#barre-box_cad-dessin)
-[![Version](https://img.shields.io/badge/version-1.3.0-blue)](metadata.txt)
+[![Version](https://img.shields.io/badge/version-1.4.0-blue)](metadata.txt)
 [![License](https://img.shields.io/badge/license-GPL%20v3-orange)](LICENSE)
 [![Docs](https://img.shields.io/badge/docs-FR%20%7C%20EN%20%7C%20ES%20%7C%20PT%20%7C%20DE-lightgrey)](#français)
 
@@ -65,6 +65,7 @@ Fini les allers-retours entre la carte et un panneau de couches de 40 lignes : c
 | <img src="icons/delete_feature.svg" width="24"/> | **Supprimer entité** | Clic (cumulable, validé par clic droit) ou lasso libre, puis confirmation |
 | <img src="icons/hide_layer.svg" width="24"/> | **Masquer couche** | Clic sur un objet : sa couche est décochée |
 | <img src="icons/hide_feature.svg" width="24"/> | **Masquer entité** | Clic sur un objet : il est retiré de l'affichage par un filtre de couche |
+| <img src="icons/redo.svg" width="24"/> | **Rétablir** | Rejoue l'action qu'on vient d'annuler, une à une ; toute nouvelle action vide la liste |
 | <img src="icons/undo.svg" width="24"/> | **Annuler** | Défait les dernières actions une à une, jusqu'à 50 (masquages, suppressions, tri, dessins, gomme, transformations, propriétés) ; l'infobulle indique la prochaine action annulée |
 | <img src="icons/show_all.svg" width="24"/> | **Tout afficher** | Recoche toutes les couches vecteur et retire les masquages faits par Box_cad |
 | <img src="icons/hide_all.svg" width="24"/> | **Tout éteindre** | Décoche toutes les couches vecteur (annulable en une fois) |
@@ -91,7 +92,7 @@ Fini les allers-retours entre la carte et un panneau de couches de 40 lignes : c
 
 Comme dans un logiciel de DAO, on clique un premier point puis on **tape les valeurs** dans les champs qui suivent le curseur : la souris ne donne plus que la direction. Près du curseur, seules les valeurs s'affichent ; l'étape en cours, le nom des champs (champ actif en gras) et les touches sont dans la **barre d'état** de QGIS.
 
-Les outils sont rangés dans **3 boutons à menu** — **Tracer ▾**, **Modifier ▾**, **Annoter ▾** — qui affichent le dernier outil utilisé (un clic le relance, la flèche ouvre la liste), suivis des modes Remplissage, Accrochage et Ortho, puis d'une **pastille** qui montre la couleur, l'épaisseur et la couche qui recevra le dessin (clic : propriétés courantes). Tous les outils sont aussi dans le menu *Extensions → Box_cad*, rangé comme CanaPlan : Annuler en tête, puis un sous-menu par thème — Objets, Affichage, Ordre des couches, Tracer, Modifier, Annoter, Modes de dessin — et À propos.
+Les outils sont rangés dans **3 boutons à menu** — **Tracer ▾**, **Modifier ▾**, **Annoter ▾** — qui affichent le dernier outil utilisé (un clic le relance, la flèche ouvre la liste), suivis de la **Gomme**, d'**Annuler** et de **Rétablir** (boutons à part entière), puis des modes Remplissage, Accrochage et Ortho, puis d'une **pastille** qui montre la couleur, l'épaisseur et la couche qui recevra le dessin (clic : propriétés courantes). Tous les outils sont aussi dans le menu *Extensions → Box_cad*, rangé comme CanaPlan : Annuler et Rétablir en tête, puis un sous-menu par thème — Objets, Affichage, Ordre des couches, Tracer, Modifier, Annoter, Modes de dessin — et À propos.
 
 | Icône | Outil | Étapes | Champs |
 |:---:|---|---|---|
@@ -104,6 +105,7 @@ Les outils sont rangés dans **3 boutons à menu** — **Tracer ▾**, **Modifie
 | <img src="icons/draw_circle.svg" width="24"/> | **Cercle** | centre → rayon (polygone à 72 segments) | Rayon |
 | <img src="icons/draw_text.svg" width="24"/> | **Texte** | point d'insertion → angle (Entrée : 0°) → texte et taille | Angle ; taille en points (fixe à l'écran) |
 | <img src="icons/draw_dimension.svg" width="24"/> | **Cote** | point 1 → point 2 → position de la cote (Entrée : sans décalage) | Longueur, angle, puis décalage |
+| <img src="icons/draw_dimension_obj.svg" width="24"/> | **Cote objet** | clic sur une forme (ou un objet de la couche active en édition) → position de la cote : longueur **totale** de l'objet, la ligne de cote suit la polyligne (Entrée : cote posée sur l'objet) | Décalage |
 | <img src="icons/draw_angle.svg" width="24"/> | **Angle** | clic sur 2 lignes (ou Entrée : sommet → un point sur chaque côté) → position de l'arc : le côté choisi donne l'angle, son supplémentaire ou l'angle rentrant | Longueur, angle (mode 3 points), puis rayon |
 | <img src="icons/draw_move.svg" width="24"/> | **Déplacer** | objet(s) → point de base → point d'arrivée | Longueur, angle |
 | <img src="icons/draw_copy.svg" width="24"/> | **Copier** | objet(s) → point de base → un clic par copie → Entrée | Longueur, angle |
@@ -111,7 +113,8 @@ Les outils sont rangés dans **3 boutons à menu** — **Tracer ▾**, **Modifie
 | <img src="icons/draw_mirror.svg" width="24"/> | **Miroir** | objet(s) → 2 points de l'axe (l'objet est retourné) | Angle de l'axe |
 | <img src="icons/draw_scale.svg" width="24"/> | **Échelle** | objet(s) → point de base (Entrée : centre) → facteur | Facteur ; **R** : longueur actuelle → nouvelle |
 | <img src="icons/draw_align.svg" width="24"/> | **Aligner** | objet(s) → 1er point source → sa destination → 2e point source (Entrée : déplacer seulement) → sa destination → mise à l'échelle ? | **O** : oui ; **N** ou Entrée : non |
-| <img src="icons/draw_eraser.svg" width="24"/> | **Gomme** | clic sur une forme, ou cliquer-glisser (lasso) pour en effacer plusieurs | — |
+| <img src="icons/draw_eraser.svg" width="24"/> | **Gomme** | bouton à part entière de la barre : clic sur une forme, ou cliquer-glisser (lasso) pour en effacer plusieurs | — |
+| <img src="icons/undo.svg" width="24"/> <img src="icons/redo.svg" width="24"/> | **Annuler · Rétablir** | boutons de la barre Dessin, les mêmes que ceux de la barre principale | — |
 | <img src="icons/draw_properties.svg" width="24"/> | **Propriétés** | clic sur une forme dessinée ; Entrée sans objet : propriétés courantes | Couleur, épaisseur, trait, remplissage, opacité, texte |
 | <img src="icons/draw_fill.svg" width="24"/> | **Remplissage** | bouton à bascule : actif = rectangles, carrés, cercles remplis ; inactif = vides | — |
 | <img src="icons/draw_osnap.svg" width="24"/> | **Accrochage objet (F3)** | actif par défaut ; flèche du bouton : modes à cocher (mémorisés) | — |
@@ -147,6 +150,8 @@ Les outils sont rangés dans **3 boutons à menu** — **Tracer ▾**, **Modifie
   Les cercles, centres de polygones, quadrants et points opposés sont reconnus sur les **dessins Box_cad** (lus directement). Sur vos **autres couches**, Box_cad s'appuie sur les index de QGIS, construits en arrière-plan sans bloquer : extrémité, milieu, intersection, perpendiculaire et proche. Une couche dont l'index est en cours de construction (quelques secondes, une seule fois) n'est pas encore accrochable. Si rien n'est trouvé, l'accrochage QGIS habituel s'applique (s'il est activé) ; l'accrochage l'emporte sur l'ortho, comme en DAO.
 - **Remplissage** : désactivé par défaut, les formes sont vides (contour seul) ; chaque forme garde son état dans le champ `rempli` de la couche brouillon.
 - **Cote** : ligne de cote fléchée, lignes de rappel et étiquette de longueur, dans la couche brouillon « Box_cad dessin – cotes ».
+- **Cote objet** : la cote porte la longueur **totale** de l'objet désigné (somme des segments d'une polyligne, périmètre d'un polygone ou d'un cercle). Sur une polyligne d'au moins 3 sommets, la ligne de cote **suit la forme**, décalée à la souris ou d'une valeur tapée (à gauche ou à droite du sens de tracé), avec une pointe à chaque bout et deux rappels ; sinon elle reste droite entre le premier et le dernier sommet. Elle suit l'objet quand on le déplace, le tourne, le copie ou le met à l'échelle ; déplacée seule, elle garde la forme de l'objet.
+- **Rétablir** : rejoue la dernière action annulée (une à une, jusqu'à 50) ; toute nouvelle action vide la liste.
 - **Déplacer, Copier, Miroir, Échelle, Aligner** (et Rotation) : agissent sur les formes dessinées (bouton Annuler) et sur la couche active en édition (Ctrl+Z). Une copie dans une couche de données reprend les attributs mais pas la clé primaire (nouveau fid), et ne recopie pas les objets liés par relation.
 - **Texte** : brouillon « Box_cad dessin – textes » ; taille en points, fixe à l'écran ; angle anti-horaire, comme en DAO. Un texte se désigne en cliquant n'importe où sur ses lettres : Déplacer, Copier, Gomme et Propriétés s'y appliquent ; la Rotation l'incline, l'Échelle change sa taille, le Miroir le reporte de l'autre côté de l'axe en le gardant lisible.
 - **Propriétés** : couleur, épaisseur, type de trait (continu, tirets, pointillés, mixte), remplissage et opacité, forme par forme, sur les dessins Box_cad uniquement ; la case « Utiliser pour les prochaines formes » les rend courantes (mémorisées).
@@ -207,7 +212,8 @@ No more back-and-forth between the map and a 40-row layers panel: click what is 
 - **Locate layer**: click a feature to make its layer active and selected in the Layers panel.
 - **Delete feature**: cumulative clicks (confirmed with right-click) or freehand lasso, always with a confirmation dialog.
 - **Hide layer / Hide feature**: uncheck the clicked feature's layer, or filter the feature out of its layer.
-- **Undo**: reverts the last hide, delete or sort.
+- **Undo / Redo**: Undo reverts the last action (hide, delete, sort, drawing, eraser, transformations, properties), Redo replays it; both are buttons of the Drawing toolbar too, next to the Eraser.
+- **Object dimension** (Annotate): the dimension carries the object's **total length** (sum of the segments of a polyline, perimeter of a polygon or circle) and its line follows the polyline, with an arrowhead at each end; it follows the object when moved, rotated, copied or scaled.
 - **Show all / Hide all**: re-check every vector layer and remove Box_cad's filters, or uncheck every vector layer.
 - **Sort by geometry**: points, then lines, then polygons, alphabetical, inside each group; subgroups stay in place.
 - **Layer order by click**: to top, up, down, to bottom.
@@ -314,7 +320,7 @@ Den Ordner `Box_cad` in das QGIS-Erweiterungsverzeichnis kopieren und unter *Erw
 | `plugin_main.py` | Barre d'outils, menu, actions et annulation |
 | `_identify_enums.py` | Base commune des outils « clic sur un objet » |
 | `map_tool_*.py` | Un outil de carte par fonction (localiser, masquer, supprimer, ordre) |
-| `draw/` | Barre Dessin : géométrie pure, saisie dynamique, bandeau d'aide (`guide.py`), outils, couche cible, SCR de travail métrique (`crs.py`) |
+| `draw/` | Barre Dessin : géométrie pure, saisie dynamique, bandeau d'aide (`guide.py`), outils (dont `dimension_objet.py`, la cote qui suit un objet), couche cible, SCR de travail métrique (`crs.py`) |
 | `about_dialog.py` | Fenêtre « À propos » |
 | `icons/` | Icônes SVG de la barre |
 
@@ -326,6 +332,7 @@ Le détail est dans [`CHANGELOG.md`](CHANGELOG.md).
 
 | Version | Notes |
 |---------|-------|
+| **1.4.0** | Gomme, Annuler et Rétablir en boutons de la barre Dessin — Rétablir — Cote objet : longueur totale, la ligne de cote suit la polyligne, cote associée à l'objet |
 | **1.3.0** | Plusieurs objets au lasso pour Déplacer, Copier, Rotation, Miroir, Échelle, Aligner — Bandeau d'aide sur tous les outils de dessin (à couper dans Modes de dessin) — Lasso refermé près de son départ bien reconnu (Gomme, Supprimer) — Textes repris par le lasso de la Gomme |
 | **1.2.2** | Formulation « façon DAO / CAD » — Logo et badge de la fenêtre À propos — Section Auteur sans employeur |
 | **1.2.1** | Message « mètres vrais » raccourci (tient sur une ligne) — Captures d'Aligner et des mesures en mètres vrais |

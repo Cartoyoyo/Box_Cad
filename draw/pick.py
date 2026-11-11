@@ -75,6 +75,15 @@ def label_box(canvas, layer, feature, geom=None):
     em = _em(canvas, crs=layer.crs())
     if kind == "dimension":
         a, b = line[0], line[-1]
+        if len(line) >= 3:                          # cote qui suit une polyligne : milieu de la ligne
+            whole = QgsGeometry.fromPolylineXY(line)
+            centre = whole.interpolate(whole.length() / 2).asPoint()
+            _, _, after, _ = whole.closestSegmentWithContext(centre)
+            a, b = whole.vertexAt(max(after - 1, 0)), whole.vertexAt(max(after, 1))
+            a, b = QgsPointXY(a), QgsPointXY(b)
+            seg, direction = G.distance(a, b) / 2, G.angle_of(a, b)
+            a = G.polar_point(centre, seg, direction + 180.0)
+            b = G.polar_point(centre, seg, direction)
         chars = len(f"{_number(feature['longueur'], 0):.2f} m")
         width = chars * 0.56 * em
         half = LABEL_DIST_MM * canvas.mapSettings().outputDpi() / 25.4 * pixel_size(canvas, layer.crs()) + 1.2 * em

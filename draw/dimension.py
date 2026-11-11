@@ -4,7 +4,9 @@ Geometrie enregistree (MultiLineString, brouillon « Box_cad dessin – cotes »
   partie 1 = ligne de cote (fleches aux deux bouts, etiquette = longueur mesuree)
   parties 2 et 3 = lignes de rappel (absentes si la cote est posee sans decalage).
 """
-from qgis.core import QgsGeometry, QgsPointXY
+import math
+
+from qgis.core import Qgis, QgsGeometry, QgsPointXY
 
 from . import geometry as G
 from .draw_tool_base import DrawTool
@@ -45,6 +47,8 @@ def dimension_parts(geom):
 
 def moved_dimension(geom, dx, dy):
     """Deplacer une cote : les points mesures restent, la ligne de cote suit le decalage."""
+    if path_parts(geom) is not None:                 # cote qui suit une polyligne
+        return moved_path_dimension(geom, dx, dy)
     parts = dimension_parts(geom)
     if parts is None:
         return None
@@ -53,6 +57,114 @@ def moved_dimension(geom, dx, dy):
     d1 = G.polar_point(p1, offset, ang + 90.0)
     offset = G.signed_offset(p1, ang, QgsPointXY(d1.x() + dx, d1.y() + dy))
     return dimension_geometry(p1, p2, offset)[0]
+
+
+# ----------------------------------------------------------------------
+# Cote qui suit une polyligne (Cote objet)
+# ----------------------------------------------------------------------
+# Meme enregistrement qu'une cote ordinaire (MultiLineString) : la partie 1, au lieu d'un segment,
+# est la polyligne decalee de l'objet ; les parties 2 et 3 relient ses extremites aux bouts de l'objet.
+# Une partie 1 a plus de deux sommets designe une cote « chemin » ; l'objet se retrouve en decalant
+# la ligne de cote en sens inverse.
+
+MITRE, MITRE_LIMIT, ARC_SEGMENTS = Qgis.JoinStyle.Miter, 3.0, 8      # QgsGeometry.offsetCurve : angles vifs en onglet
+
+
+def _line_points(geom):
+    """Sommets de la plus longue partie d'une ligne."""
+    if geom is None or geom.isNull() or geom.isEmpty():
+        return []
+    parts = geom.asMultiPolyline() if geom.isMultipart() else [geom.asPolyline()]
+    parts = [p for p in parts if len(p) >= 2]
+    return [QgsPointXY(v) for v in max(parts, key=lambda p: QgsGeometry.fromPolylineXY(p).length())] if parts else []
+
+
+def clean_path(path, tol=1e-4):
+    """Polyligne sans sommets confondus (un doublon fausse la direction du premier segment)."""
+    out = []
+    for v in path:
+        v = QgsPointXY(v)
+        if not out or G.distance(out[-1], v) > tol:
+            out.append(v)
+    return out
+
+
+def offset_line(path, offset):
+    """Polyligne `path` (liste de points) decalee de `offset` (positif = a gauche), dans le meme
+    sens de parcours ; None si le decalage s'effondre. Une partie isolee est ecartee."""
+    path = clean_path(path)
+    if len(path) < 2:
+        return None
+    if abs(offset) < 1e-9:
+        return path
+    geom = QgsGeometry.fromPolylineXY(path).offsetCurve(offset, ARC_SEGMENTS, MITRE, MITRE_LIMIT)
+    pts = _line_points(geom)
+    if len(pts) < 2:
+        return None
+    if G.distance(pts[0], path[0]) > G.distance(pts[-1], path[0]):      # GEOS rend parfois la courbe a l'envers
+        pts.reverse()
+    return pts
+
+
+def path_dimension_geometry(path, offset):
+    """Cote qui suit la polyligne `path` ; retombe sur la cote droite si le decalage s'effondre.
+    Retourne la geometrie (MultiLineString)."""
+    path = clean_path(path)
+    line = offset_line(path, offset)
+    if line is None or len(line) < 2:
+        return dimension_geometry(path[0], path[-1], offset)[0]
+    parts = [line]
+    if abs(offset) > 0:
+        parts += [[QgsPointXY(path[0]), line[0]], [QgsPointXY(path[-1]), line[-1]]]
+    return QgsGeometry.fromMultiPolylineXY(parts)
+
+
+def path_offset_at(path, point):
+    """Decalage signe (positif = a gauche du sens de parcours) de `point` par rapport a `path`."""
+    geom = QgsGeometry.fromPolylineXY(path)
+    dist, nearest, after, _ = geom.closestSegmentWithContext(QgsPointXY(point))
+    if after <= 0:
+        return 0.0
+    a, b = geom.vertexAt(after - 1), geom.vertexAt(after)
+    side = (b.x() - a.x()) * (point.y() - a.y()) - (b.y() - a.y()) * (point.x() - a.x())
+    return math.sqrt(dist) * (1.0 if side >= 0 else -1.0)         # closestSegment rend un carre
+
+
+def path_parts(geom):
+    """(polyligne de l'objet, decalage signe) d'une cote « chemin » enregistree, ou None
+    (cote ordinaire ou geometrie illisible)."""
+    if geom is None or geom.isNull():
+        return None
+    parts = geom.asMultiPolyline() if geom.isMultipart() else [geom.asPolyline()]
+    if not parts or len(parts[0]) < 3:
+        return None
+    line = [QgsPointXY(v) for v in parts[0]]
+    if len(parts) < 3:                                       # posee sans decalage : c'est l'objet
+        return line, 0.0
+    first = QgsPointXY(parts[1][0])
+    vx, vy = line[0].x() - first.x(), line[0].y() - first.y()    # rappel : objet -> ligne de cote
+    dx, dy = line[1].x() - line[0].x(), line[1].y() - line[0].y()
+    sign = 1.0 if (-dy * vx + dx * vy) >= 0 else -1.0             # a gauche du premier segment ?
+    offset = sign * math.hypot(vx, vy)
+    path = offset_line(line, -offset)
+    if path is None or len(path) < 2:
+        return None
+    path[0], path[-1] = first, QgsPointXY(parts[2][0])               # extremites exactes
+    return path, offset
+
+
+def moved_path_dimension(geom, dx, dy):
+    """Deplacer une cote « chemin » seule : l'objet reste, la ligne de cote suit la souris
+    (nouveau decalage = distance signee du milieu de la cote deplace a l'objet)."""
+    parts = path_parts(geom)
+    if parts is None:
+        return None
+    path, _ = parts
+    line = _line_points(geom)
+    mid = QgsGeometry.fromPolylineXY(line)
+    anchor = mid.interpolate(mid.length() / 2).asPoint()
+    offset = path_offset_at(path, QgsPointXY(anchor.x() + dx, anchor.y() + dy))
+    return path_dimension_geometry(path, offset)
 
 
 class DimensionTool(DrawTool):

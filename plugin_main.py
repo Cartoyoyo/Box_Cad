@@ -4,8 +4,8 @@ from qgis.PyQt.QtWidgets import QAction, QLabel, QMenu, QToolButton, QWidgetActi
 from qgis.PyQt.QtGui import QColor, QIcon, QPainter, QPen, QPixmap
 from qgis.PyQt.QtCore import QSettings, Qt, QTimer
 from qgis.core import (
-    QgsProject, QgsVectorLayer, QgsExpression, QgsFeature, QgsLayerTreeLayer, QgsWkbTypes,
-    QgsMessageLog, Qgis,
+    QgsProject, QgsVectorLayer, QgsExpression, QgsFeature, QgsFeatureRequest, QgsGeometry,
+    QgsLayerTreeLayer, QgsWkbTypes, QgsMessageLog, Qgis,
 )
 
 
@@ -17,8 +17,9 @@ UNDO_DEPTH = 50
 UNDO_LABELS = {
     'layer': "masquage de couche", 'feature': "masquage d'entité", 'all_layers': "Tout éteindre",
     'delete_features_multi': "suppression", 'sort': "tri des couches", 'add_features': "ajout de forme",
-    'draft_erase': "gomme", 'draft_geom': "modification de forme", 'draft_attrs': "propriétés",
-    'draft_geoms': "modification de plusieurs objets", 'add_features_multi': "copie",
+    'draft_erase': "gomme / suppression", 'draft_geom': "modification de forme", 'draft_attrs': "propriétés",
+    'draft_geoms': "modification de plusieurs objets", 'add_features_multi': "ajout de forme(s)",
+    'delete_ids': "suppression",
 }
 
 
@@ -64,6 +65,8 @@ class LayerPicker:
         self.action_hide_feature = None
         self.action_delete_feature = None
         self.action_undo = None
+        self.action_redo = None
+        self.action_eraser = None
         self.action_show_all = None
         self.action_hide_all = None
         self.action_sort_geom = None
@@ -110,7 +113,11 @@ class LayerPicker:
         #            | ('draft_erase', {layer_id: [QgsFeature]}) | ('draft_geom', layer_id, fid, old_geom)
         #            | ('draft_geoms', [(layer_id, fid, old_geom, old_attrs)])  formes + cotes associees
         #            | ('add_features_multi', [(layer_id, [fid])])  copies dans plusieurs brouillons
+        #            | ('delete_ids', {layer_id: [fid]})  inverse d'une restauration (retablir)
+        # Chaque entree s'applique par _apply() qui rend l'entree INVERSE : annuler la pousse sur la
+        # pile de retablissement, retablir la repousse sur la pile d'annulation.
         self._undo = []         # pile d'annulation (la plus recente en dernier)
+        self._redo = []         # pile de retablissement (videe par toute nouvelle action)
         # dict[layer_id] -> [cle SQL, ...] entites masquees par subsetString
         self._hidden_features = {}
         # dict[layer_id] -> filtre d'origine de la couche avant le premier masquage
@@ -181,6 +188,13 @@ class LayerPicker:
             "Annuler les dernières actions, une à une (jusqu'à 50)")
         self.action_undo.setEnabled(False)
         self.action_undo.triggered.connect(self._undo_last)
+
+        # --- Retablir l'action annulee ---
+        self.action_redo = self._add_action(
+            "redo.svg", "Rétablir l'action annulée",
+            "Rétablir les actions annulées, une à une")
+        self.action_redo.setEnabled(False)
+        self.action_redo.triggered.connect(self._redo_last)
 
         self.toolbar.addSeparator()
 
@@ -259,6 +273,7 @@ class LayerPicker:
         if root is not None:
             root.clear()            # titres et sous-menus ; QGIS retire ensuite le menu vide
             self.iface.removePluginMenu(MENU, self.action_undo)
+            self.iface.removePluginMenu(MENU, self.action_redo)
         for action in self._actions:
             action.deleteLater()
         for submenu in self._submenus:
@@ -280,6 +295,7 @@ class LayerPicker:
     def _init_draw_toolbar(self):
         from .draw.angle_dim import AngleTool
         from .draw.dimension import DimensionTool
+        from .draw.dimension_objet import ObjectDimensionTool
         from .draw.eraser import EraserTool
         from .draw.properties import PropertiesTool
         from .draw.text_tool import TextTool
@@ -325,8 +341,6 @@ class LayerPicker:
                 ("draw_align.svg", "Aligner", "ALIGNER : objet, premier point source puis sa destination, "
                  "deuxième point source (Entrée : déplacer seulement) puis sa destination ; O = mise à "
                  "l'échelle sur les points." + pick, AlignTool),
-                ("draw_eraser.svg", "Gomme", "GOMME : clic sur une forme dessinée, ou cliquer-glisser pour en "
-                 "effacer plusieurs. Couches brouillon seulement ; Annuler restaure.", EraserTool),
                 ("draw_properties.svg", "Propriétés", "PROPRIÉTÉS : clic sur une forme dessinée (couleur, épaisseur, "
                  "trait, remplissage, texte) ; Entrée sans objet : propriétés courantes.", PropertiesTool),
             ]),
@@ -335,6 +349,10 @@ class LayerPicker:
                  "(en points, fixe à l'écran).", TextTool),
                 ("draw_dimension.svg", "Cote", "COTE : premier point, second point (longueur, angle), puis position "
                  "de la ligne de cote (Entrée : sans décalage)." + keys, DimensionTool),
+                ("draw_dimension_obj.svg", "Cote objet",
+                 "COTE OBJET : clic sur une forme dessinée (ou un objet de la couche active en édition), puis "
+                 "position de la cote ; elle porte la longueur totale de l'objet (polyligne : somme des "
+                 "segments ; polygone, cercle : périmètre)." + keys, ObjectDimensionTool),
                 ("draw_angle.svg", "Angle", "ANGLE : clic sur deux lignes (ou Entrée : sommet puis un point "
                  "sur chaque côté), puis position de l'arc ; le côté choisi donne l'angle, son "
                  "supplémentaire ou l'angle rentrant." + keys, AngleTool),
@@ -349,6 +367,20 @@ class LayerPicker:
                 actions.append(action)
             self._add_group_button(key, title, actions, settings)
             self._draw_groups.append((title, actions))
+
+        # Gomme, Annuler, Retablir : boutons a part entiere (pas dans un menu deroulant)
+        self.draw_toolbar.addSeparator()
+        self.action_eraser = self._add_action(
+            "draw_eraser.svg", "Gomme",
+            "GOMME : clic sur une forme dessinée, ou cliquer-glisser pour en effacer plusieurs. "
+            "Couches brouillon seulement ; Annuler restaure.",
+            checkable=True, toolbar=self.draw_toolbar, menu=MENU_DRAW)
+        self._bind_tool(self.action_eraser, EraserTool)
+        self.draw_toolbar.addAction(self.action_undo)
+        self.draw_toolbar.addAction(self.action_redo)
+        for title, actions in self._draw_groups:
+            if title == "Modifier":
+                actions.insert(max(len(actions) - 1, 0), self.action_eraser)   # menu Extensions : avant Propriétés
 
         self.draw_toolbar.addSeparator()
         self.action_fill = self._add_action(
@@ -580,6 +612,7 @@ class LayerPicker:
         """Extensions → Box_cad, comme CanaPlan : l'action principale, puis un sous-menu
         par theme, puis A propos."""
         self.iface.addPluginToMenu(MENU, self.action_undo)      # cree le sous-menu Box_cad
+        self.iface.addPluginToMenu(MENU, self.action_redo)
         root = self._plugin_root_menu()
         if root is None:
             return
@@ -680,7 +713,9 @@ class LayerPicker:
         return self._undo[-1] if self._undo else None
 
     def _set_undo(self, entry):
-        """Empile une action annulable ; None vide toute la pile."""
+        """Empile une action annulable ; None vide toutes les piles. Toute nouvelle action
+        efface la pile de retablissement (comme partout)."""
+        self._redo.clear()
         if entry is None:
             self._undo.clear()
         else:
@@ -695,35 +730,42 @@ class LayerPicker:
         self._update_undo_action()
 
     def _drop_undo(self, ops):
-        """Retire de la pile les actions d'un certain type (ex. masquages apres Tout afficher)."""
+        """Retire des piles les actions d'un certain type (ex. masquages apres Tout afficher)."""
         self._undo = [e for e in self._undo if e[0] not in ops]
+        self._redo = [e for e in self._redo if e[0] not in ops]
         self._update_undo_action()
 
     def _update_undo_action(self):
-        if not self.action_undo:
-            return
-        self.action_undo.setEnabled(bool(self._undo))
-        if self._undo:
-            label = UNDO_LABELS.get(self._undo[-1][0], "dernière action")
-            self.action_undo.setToolTip(f"Annuler : {label} ({len(self._undo)} action(s) annulable(s))")
-        else:
-            self.action_undo.setToolTip("Rien à annuler")
+        if self.action_undo:
+            self.action_undo.setEnabled(bool(self._undo))
+            if self._undo:
+                label = UNDO_LABELS.get(self._undo[-1][0], "dernière action")
+                self.action_undo.setToolTip(f"Annuler : {label} ({len(self._undo)} action(s) annulable(s))")
+            else:
+                self.action_undo.setToolTip("Rien à annuler")
+        if self.action_redo:
+            self.action_redo.setEnabled(bool(self._redo))
+            if self._redo:
+                self.action_redo.setToolTip(f"Rétablir l'action annulée ({len(self._redo)} possible(s))")
+            else:
+                self.action_redo.setToolTip("Rien à rétablir")
 
     def _remap_fids(self, layer_id, mapping):
         """Formes restaurees = nouveaux identifiants : on les reporte sur les actions
-        plus anciennes de la pile pour qu'elles restent annulables."""
-        for i, entry in enumerate(self._undo):
-            op = entry[0]
-            if op == 'add_features' and entry[1] == layer_id:
-                self._undo[i] = (op, layer_id, [mapping.get(f, f) for f in entry[2]])
-            elif op == 'add_features_multi':
-                self._undo[i] = (op, [(lid, [mapping.get(f, f) for f in fids] if lid == layer_id else fids)
-                                      for lid, fids in entry[1]])
-            elif op in ('draft_geom', 'draft_attrs') and entry[1] == layer_id and entry[2] in mapping:
-                self._undo[i] = (op, layer_id, mapping[entry[2]]) + tuple(entry[3:])
-            elif op == 'draft_geoms':
-                self._undo[i] = (op, [(lid, mapping.get(fid, fid) if lid == layer_id else fid) + tuple(rest)
-                                      for lid, fid, *rest in entry[1]])
+        plus anciennes des piles (annuler ET retablir) pour qu'elles restent applicables."""
+        for stack in (self._undo, self._redo):
+            for i, entry in enumerate(stack):
+                op = entry[0]
+                if op == 'add_features' and entry[1] == layer_id:
+                    stack[i] = (op, layer_id, [mapping.get(f, f) for f in entry[2]])
+                elif op == 'add_features_multi':
+                    stack[i] = (op, [(lid, [mapping.get(f, f) for f in fids] if lid == layer_id else fids)
+                                     for lid, fids in entry[1]])
+                elif op in ('draft_geom', 'draft_attrs') and entry[1] == layer_id and entry[2] in mapping:
+                    stack[i] = (op, layer_id, mapping[entry[2]]) + tuple(entry[3:])
+                elif op == 'draft_geoms':
+                    stack[i] = (op, [(lid, mapping.get(fid, fid) if lid == layer_id else fid) + tuple(rest)
+                                     for lid, fid, *rest in entry[1]])
 
     # ------------------------------------------------------------------
     # Actions appelees par les map tools
@@ -789,11 +831,8 @@ class LayerPicker:
             layer.setSubsetString(prev_subset)
             self.warn(f"Le fournisseur de « {layer.name()} » refuse le filtre : entite non masquee.")
 
-    def delete_features_multi(self, to_delete):
-        """Supprime des entites de plusieurs couches.
-        to_delete: dict[layer_id -> (layer, [QgsFeature])]
-        Si l'utilisateur editait deja la couche, la suppression reste dans son tampon
-        d'edition (pas d'enregistrement force de ses modifications en cours)."""
+    def _delete_features(self, to_delete):
+        """Supprime les entites ; rend ({layer_id: [QgsFeature]} supprimees, [erreurs])."""
         saved = {}
         errors = []
         for layer_id, (layer, features) in to_delete.items():
@@ -815,7 +854,14 @@ class LayerPicker:
                 layer.rollBack()
                 continue
             saved[layer_id] = features  # deja des copies QgsFeature
+        return saved, errors
 
+    def delete_features_multi(self, to_delete):
+        """Supprime des entites de plusieurs couches.
+        to_delete: dict[layer_id -> (layer, [QgsFeature])]
+        Si l'utilisateur editait deja la couche, la suppression reste dans son tampon
+        d'edition (pas d'enregistrement force de ses modifications en cours)."""
+        saved, errors = self._delete_features(to_delete)
         if errors:
             self.warn("Suppression incomplete - " + " | ".join(errors))
         if saved:
@@ -829,36 +875,65 @@ class LayerPicker:
         if not self._undo:
             return
         entry = self._undo.pop()
+        inverse = self._safe_apply(entry, True)
+        if inverse is not None:
+            self._redo.append(inverse)
+        self._update_undo_action()
 
+    def _redo_last(self):
+        if not self._redo:
+            return
+        entry = self._redo.pop()
+        inverse = self._safe_apply(entry, False)
+        if inverse is not None:
+            self._undo.append(inverse)
+            del self._undo[:-UNDO_DEPTH]
+        self._update_undo_action()
+
+    def _safe_apply(self, entry, undoing):
+        try:
+            return self._apply(entry, undoing)
+        except Exception as exc:        # une entree perimee (couche supprimee...) ne doit pas bloquer les piles
+            QgsMessageLog.logMessage(f"{'Annuler' if undoing else 'Rétablir'} : {exc}", "Box_cad",
+                                     Qgis.MessageLevel.Warning)
+            self.warn(f"{'Annulation' if undoing else 'Rétablissement'} impossible : {exc}")
+            return None
+
+    def _apply(self, entry, undoing):
+        """Applique une entree (undoing=True : on l'annule ; False : on la retablit) et rend
+        l'entree inverse a empiler de l'autre cote, ou None."""
         project = QgsProject.instance()
         root = project.layerTreeRoot()
         op = entry[0]
 
-        if op == 'layer':
-            _, layer_id = entry
-            node = root.findLayer(layer_id)
-            if node:
-                node.setItemVisibilityChecked(True)
+        if op in ('layer', 'all_layers'):
+            ids = [entry[1]] if op == 'layer' else entry[1]
+            for layer_id in ids:
+                node = root.findLayer(layer_id)
+                if node:
+                    node.setItemVisibilityChecked(undoing)       # annuler un masquage = afficher
+            return entry
 
-        elif op == 'feature':
+        if op == 'feature':
             _, layer_id, key, prev_subset = entry
             layer = project.mapLayer(layer_id)
             if layer:
-                keys = self._hidden_features.get(layer_id, [])
-                if key in keys:
-                    keys.remove(key)
-                layer.setSubsetString(prev_subset)
+                keys = self._hidden_features.setdefault(layer_id, [])
+                if undoing:
+                    if key in keys:
+                        keys.remove(key)
+                    layer.setSubsetString(prev_subset)
+                else:
+                    self._orig_subset.setdefault(layer_id, prev_subset)
+                    if key not in keys:
+                        keys.append(key)
+                    self._rebuild_subset(layer)
+            return entry
 
-        elif op == 'all_layers':
-            _, layer_ids = entry
-            for layer_id in layer_ids:
-                node = root.findLayer(layer_id)
-                if node:
-                    node.setItemVisibilityChecked(True)
-
-        elif op == 'delete_features_multi':
+        if op == 'delete_features_multi':             # annuler une suppression = restaurer
             _, saved = entry
             errors = []
+            new_ids = {}
             for layer_id, saved_features in saved.items():
                 layer = project.mapLayer(layer_id)
                 if not layer or not saved_features:
@@ -867,61 +942,111 @@ class LayerPicker:
                 if not was_editing and not layer.startEditing():
                     errors.append(f"{layer.name()} : edition impossible")
                     continue
+                track = layer.featureCount() < 200000     # reperer les nouveaux identifiants
+                before = set(layer.allFeatureIds()) if track else None
                 layer.beginEditCommand(f"Restaurer {len(saved_features)} entite(s) [Box_cad]")
                 layer.addFeatures(saved_features)
                 layer.endEditCommand()
                 if not was_editing and not layer.commitChanges():
                     errors.append(f"{layer.name()} : " + " ; ".join(layer.commitErrors()))
                     layer.rollBack()
+                    continue
+                if track:
+                    added = sorted(set(layer.allFeatureIds()) - before)
+                    if len(added) == len(saved_features):
+                        new_ids[layer_id] = added
             if errors:
                 self.warn("Restauration incomplete - " + " | ".join(errors))
+            return ('delete_ids', new_ids) if new_ids else None
 
-        elif op == 'draft_attrs':
-            _, layer_id, fid, old = entry
-            layer = project.mapLayer(layer_id)
-            if layer:
-                layer.dataProvider().changeAttributeValues({fid: old})
-                layer.triggerRepaint()
-
-        elif op in ('draft_geom', 'draft_geoms'):
-            items = entry[1] if op == 'draft_geoms' else [entry[1:]]
-            for layer_id, fid, old_geom, *rest in items:
+        if op == 'delete_ids':                        # retablir une suppression
+            to_delete = {}
+            for layer_id, fids in entry[1].items():
                 layer = project.mapLayer(layer_id)
                 if layer:
-                    layer.dataProvider().changeGeometryValues({fid: old_geom})
-                    if rest and rest[0]:                 # angle / taille d'un texte, longueur d'une cote
-                        layer.dataProvider().changeAttributeValues({fid: rest[0]})
-                    layer.triggerRepaint()
+                    feats = [QgsFeature(f) for f in layer.getFeatures(QgsFeatureRequest().setFilterFids(fids))]
+                    if feats:
+                        to_delete[layer_id] = (layer, feats)
+            saved, errors = self._delete_features(to_delete)
+            if errors:
+                self.warn("Suppression incomplete - " + " | ".join(errors))
+            return ('delete_features_multi', saved) if saved else None
 
-        elif op == 'draft_erase':
+        if op == 'draft_attrs':
+            _, layer_id, fid, values = entry
+            layer = project.mapLayer(layer_id)
+            if not layer:
+                return None
+            feat = next(layer.getFeatures(QgsFeatureRequest(fid)), None)
+            current = {i: feat.attribute(i) for i in values} if feat else None
+            layer.dataProvider().changeAttributeValues({fid: values})
+            layer.triggerRepaint()
+            return ('draft_attrs', layer_id, fid, current) if current is not None else None
+
+        if op in ('draft_geom', 'draft_geoms'):
+            items = entry[1] if op == 'draft_geoms' else [entry[1:]]
+            out = []
+            for layer_id, fid, geom, *rest in items:
+                layer = project.mapLayer(layer_id)
+                if not layer:
+                    continue
+                feat = next(layer.getFeatures(QgsFeatureRequest(fid)), None)
+                if feat is None:
+                    continue
+                attrs = rest[0] if rest else None
+                current_attrs = {i: feat.attribute(i) for i in attrs} if attrs else None
+                out.append((layer_id, fid, QgsGeometry(feat.geometry())) + ((current_attrs,) if rest else ()))
+                layer.dataProvider().changeGeometryValues({fid: geom})
+                if attrs:                                # angle / taille d'un texte, longueur d'une cote
+                    layer.dataProvider().changeAttributeValues({fid: attrs})
+                layer.triggerRepaint()
+            if not out:
+                return None
+            return ('draft_geoms', out) if op == 'draft_geoms' else (op,) + out[0]
+
+        if op == 'draft_erase':                       # annuler une gomme = restaurer les formes
             _, saved = entry
+            restored = []
             for layer_id, feats in saved.items():
                 layer = project.mapLayer(layer_id)
                 if layer:
                     ok, added = layer.dataProvider().addFeatures([QgsFeature(f) for f in feats])
                     if ok and added:
                         self._remap_fids(layer_id, {f.id(): a.id() for f, a in zip(feats, added)})
+                        restored.append((layer_id, [a.id() for a in added]))
                     layer.triggerRepaint()
+            return ('add_features_multi', restored) if restored else None
 
-        elif op in ('add_features', 'add_features_multi'):
-            for layer_id, fids in (entry[1] if op == 'add_features_multi' else [entry[1:]]):
+        if op in ('add_features', 'add_features_multi'):    # annuler un ajout = effacer les formes
+            pairs = entry[1] if op == 'add_features_multi' else [entry[1:]]
+            saved = {}
+            for layer_id, fids in pairs:
                 layer = project.mapLayer(layer_id)
-                if layer:
-                    layer.dataProvider().deleteFeatures(fids)
-                    layer.triggerRepaint()
+                if not layer:
+                    continue
+                feats = [QgsFeature(f) for f in layer.getFeatures(QgsFeatureRequest().setFilterFids(fids))]
+                layer.dataProvider().deleteFeatures(fids)
+                layer.triggerRepaint()
+                if feats:
+                    saved[layer_id] = feats
+            return ('draft_erase', saved) if saved else None
 
-        elif op == 'sort':
+        if op == 'sort':
             _, orders = entry
+            current = []
             bridge = project.layerTreeRegistryBridge()
             bridge.setEnabled(False)
             try:
                 for group, layer_ids in orders:
                     if not sip.isdeleted(group):
+                        current.append((group, [n.layerId() for n in group.children()
+                                                if isinstance(n, QgsLayerTreeLayer)]))
                         self._reorder_group(group, layer_ids)
             finally:
                 bridge.setEnabled(True)
+            return ('sort', current) if current else None
 
-        self._update_undo_action()
+        return None
 
     # ------------------------------------------------------------------
     # Actions globales

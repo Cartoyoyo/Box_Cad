@@ -5,7 +5,7 @@ from qgis.core import (
     QgsNullSymbolRenderer, QgsProperty, QgsSingleSymbolRenderer, QgsSymbolLayer, QgsTextBufferSettings,
     QgsTextFormat, QgsVectorLayer, QgsVectorLayerSimpleLabeling, QgsWkbTypes,
 )
-from qgis.PyQt.QtCore import QMetaType, QVariant
+from qgis.PyQt.QtCore import QMetaType, QVariant, Qt
 from qgis.PyQt.QtGui import QColor, QFont
 
 # QGIS 3.30+ a deplace GeometryType dans Qgis.* ; repli sur l'ancien nom
@@ -19,7 +19,8 @@ except AttributeError:
 
 DRAFT_PROPERTY = "box_cad/draft"
 STYLE_PROPERTY = "box_cad/style"
-STYLE_VERSION = "4"
+STYLE_VERSION = "5"
+HEAD_ANGLE = 90.0      # pointe de la cote « chemin » : un triangle dessine vers le haut, la ligne part vers +x
 DRAFT_GROUP = "Box_cad"
 DRAFT_NAMES = {
     "line": "Box_cad dessin – lignes",
@@ -189,8 +190,10 @@ def _dimension_symbol(curved=False):
     rappel.setSubSymbol(rappel_line)
     symbol.appendSymbolLayer(rappel)
 
-    cote = QgsGeometryGeneratorSymbolLayer.create({
-        "geometryModifier": "geometry_n($geometry, 1)", "SymbolType": "Line"})
+    straight = "geometry_n($geometry, 1)"
+    if not curved:        # une cote « chemin » (plus de 2 sommets) a son propre symbole, plus bas
+        straight = "if(num_points(geometry_n($geometry, 1)) > 2, NULL, geometry_n($geometry, 1))"
+    cote = QgsGeometryGeneratorSymbolLayer.create({"geometryModifier": straight, "SymbolType": "Line"})
     arrow_symbol = QgsLineSymbol()
     arrow_symbol.deleteSymbolLayer(0)
     arrow = QgsArrowSymbolLayer.create({
@@ -203,7 +206,46 @@ def _dimension_symbol(curved=False):
     arrow_symbol.appendSymbolLayer(arrow)
     cote.setSubSymbol(arrow_symbol)
     symbol.appendSymbolLayer(cote)
+    if not curved:
+        symbol.appendSymbolLayer(_path_dimension_layer())
     return symbol
+
+
+def _path_dimension_layer():
+    """Ligne de cote qui suit une polyligne : trait continu et une pointe a chaque bout
+    (le symbole fleche ne sait tracer qu'un segment droit)."""
+    from qgis.core import (QgsMarkerLineSymbolLayer, QgsMarkerSymbol, QgsSimpleLineSymbolLayer,
+                           QgsSimpleMarkerSymbolLayer)
+    layer = QgsGeometryGeneratorSymbolLayer.create({
+        "geometryModifier": "if(num_points(geometry_n($geometry, 1)) > 2, geometry_n($geometry, 1), NULL)",
+        "SymbolType": "Line"})
+    sub = QgsLineSymbol()
+    sub.deleteSymbolLayer(0)
+    shaft = QgsSimpleLineSymbolLayer()
+    shaft.setWidth(0.25)
+    shaft.setColor(QColor(58, 63, 68))
+    shaft.setDataDefinedProperty(_prop("StrokeColor"), QgsProperty.fromExpression(STROKE_COLOR))
+    sub.appendSymbolLayer(shaft)
+    for where, turn in (("FirstVertex", 180.0), ("LastVertex", 0.0)):
+        ml = QgsMarkerLineSymbolLayer()
+        placement = getattr(getattr(Qgis, "MarkerLinePlacement", None), where, None)
+        if placement is not None:
+            ml.setPlacements(Qgis.MarkerLinePlacements(placement))
+        else:
+            ml.setPlacement(getattr(QgsMarkerLineSymbolLayer, where))
+        ml.setRotateMarker(True)
+        head = QgsSimpleMarkerSymbolLayer(Qgis.MarkerShape.Triangle, 2.2)
+        head.setColor(QColor(58, 63, 68))
+        head.setStrokeStyle(Qt.PenStyle.NoPen)
+        head.setAngle(turn + HEAD_ANGLE)
+        head.setDataDefinedProperty(_prop("FillColor"), QgsProperty.fromExpression(STROKE_COLOR))
+        marker = QgsMarkerSymbol()
+        marker.deleteSymbolLayer(0)
+        marker.appendSymbolLayer(head)
+        ml.setSubSymbol(marker)
+        sub.appendSymbolLayer(ml)
+    layer.setSubSymbol(sub)
+    return layer
 
 
 def _dimension_labels(layer):
